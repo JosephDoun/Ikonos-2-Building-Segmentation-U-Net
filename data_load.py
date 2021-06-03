@@ -132,20 +132,35 @@ def make_training_hdf5(tile_size=512):
                 
                 
 class Buildings(Dataset):
-    def __init__(self):
+    def __init__(self, validation: bool=False):
+        self.validation = validation
         self.file = h5py.File('training/training_data.hdf5')
         self.X = self.file['training/X']
         self.Y = self.file['training/Y']
+        self.Xv = self.file['validation/X']
+        self.Yv = self.file['validation/Y']
         self.train_paths = [
             ('training/X/'+keyx, 'training/Y/'+keyy)
             for keyx, keyy in zip(self.X.keys(), self.Y.keys())
         ]
-        self._lengths = [
+        self.validation_paths = [
+            ('validation/X/'+keyx, 'validation/Y/'+keyy)
+            for keyx, keyy in zip(self.Xv.keys(), self.Yv.keys())
+        ]
+        self._train_lengths = [
             self.file[path[0]].len() for path in self.train_paths
         ]
-        self._cum_len = [
+        self._validation_lengths = [
+            self.file[path[0]].len() for path in self.validation_paths
+        ]
+        self._cum_train_len = [
             # Subtract 1 to transform into indexes
-            sum(self._lengths[:i])-1 for i in range(1, len(self._lengths)+1)
+            sum(self._train_lengths[:i]) - 1
+            for i in range(1, len(self._train_lengths)+1)
+        ]
+        self._cum_validation_len = [
+            sum(self._validation_lengths[:i]) - 1
+            for i in range(1, len(self._validation_lengths)+1)
         ]
         self._p = {
             'rotation': (0, 180),
@@ -197,8 +212,13 @@ class Buildings(Dataset):
                         3: float: factor for saturation rescaling,
                         4: float: factor for hue shift)
         """
+        if self.validation:
+            return img
+        
         p = self.transforms['color'].get_params(*args)
-        assert img.dim() == 3, "Tensor is not 4 dimensional"
+        assert img.dim() == 3, "Tensor is not 3 dimensional"
+        # Break to 2 three-channel tensors
+        # To be elligible for pytorch's functions
         img1 = img[:3]
         img2 = img[1:]
         for f_idx in p[0]:
@@ -207,17 +227,21 @@ class Buildings(Dataset):
             img2 = self.color_functions[f_idx](img[1:, ...], p[1:][f_idx])
         img1 = torch.cat([img1, torch.zeros(1, img.size(-2), img.size(-1))], 0)
         img2 = torch.cat([torch.zeros(1, img.size(-2), img.size(-1)), img2], 0)
+        # Rejoin and average overlap
         img = img1 + img2
         img[[1, 2]] = img[[1, 2]] / 2
         return img
             
     def _random_rotation_(self, img: List[Tensor]):
+        if self.validation:
+            return img[0], img[1]
         p = self.transforms['rotate'].get_params(self._p['rotation'])
         img[0], img[1] = F.rotate(img[0], p), F.rotate(img[1], p)
         return img[0], img[1]
         
     def __len__(self):
-        return sum(self._lengths)
+        return (sum(self._train_lengths) if not self.validation
+                else sum(self._validation_lengths))
 
     def __getitem__(self, index):
         """
@@ -233,19 +257,26 @@ class Buildings(Dataset):
                      If it is the first Dataset, simply
                      return <index>.
         """
-        grp_idx = list(map(lambda x: min(x, index),
-                           self._cum_len)).index(index)
-        path = self.train_paths[grp_idx]
-        # Figure out index within Dataset.
-        # Get the modulo of previous elements
-        # with <index> and subtract one to
-        # find how many steps further you need
-        # to go.
-        # If it falls in the first Dataset
-        # (grp_idx>0) simply return <index>.
-        idx = (index % self._cum_len[grp_idx-1] - 1
-               if grp_idx else index)
-        print(self._cum_len, grp_idx, idx)  # Test
+        if not self.validation:
+            grp_idx = list(map(lambda x: min(x, index),
+                           self._cum_train_len)).index(index)
+            path = self.train_paths[grp_idx]
+            # Figure out index within Dataset.
+            # Get the modulo of previous elements
+            # with <index> and subtract one to
+            # find how many steps further you need
+            # to go.
+            # If it falls in the first Dataset
+            # (grp_idx == 0) simply return <index>.
+            idx = (index % self._cum_train_len[grp_idx-1] - 1
+                   if grp_idx else index)
+        elif self.validation:
+            grp_idx = list(map(lambda x: min(x, index),
+                           self._cum_validation_len)).index(index)
+            path = self.validation_paths[grp_idx]
+            idx = (index % self._cum_validation_len[grp_idx-1] - 1
+                   if grp_idx else index)
+                   
         image, label = (torch.from_numpy(self.file[path[0]][idx]),
                         torch.from_numpy(self.file[path[1]][idx]))
         image = self._random_color_jitter_(image,
@@ -258,9 +289,9 @@ class Buildings(Dataset):
 
     def _get_group_(self, index):
         grp_idx = list(map(lambda x: min(x, index),
-                           self._cum_len)).index(index)
+                           self._cum_train_len)).index(index)
         path = self.train_paths[grp_idx]
-        idx = (index % self._cum_len[grp_idx-1] - 1
+        idx = (index % self._cum_train_len[grp_idx-1] - 1
                if grp_idx else index)
         return path, idx
 
