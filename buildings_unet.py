@@ -1,7 +1,6 @@
 from typing import Tuple, Union
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.tensor import Tensor
 
 
@@ -10,8 +9,7 @@ class BuildingsModel(nn.Module):
     def __init__(self, in_channels: int,
                  init_out_factor: int):
         super().__init__()
-        out_channels = in_channels * init_out_factor
-        self.down_1 = DownSamplingBlock(in_channels, out_channels)
+        self.down_1 = DownSamplingBlock(in_channels, init_out_factor)
         self.down_2 = DownSamplingBlock(self.down_1.conv2.out_channels, 2)
         self.down_3 = DownSamplingBlock(self.down_2.conv2.out_channels, 2)
         self.down_4 = DownSamplingBlock(self.down_3.conv2.out_channels, 2)
@@ -25,9 +23,18 @@ class BuildingsModel(nn.Module):
                                     skip_channels=self.down_2.conv2.out_channels)
         self.up_4 = UpSamplingBlock(self.up_3.conv2.out_channels, 2,
                                     skip_channels=self.down_1.conv2.out_channels)
-        self.pred = nn.Conv2d(self.up_4.conv2.out_channels,
-                              out_channels=2,
-                              kernel_size=1)
+        self.z = nn.Conv2d(self.up_4.conv2.out_channels,
+                           out_channels=2,
+                           kernel_size=1)
+        self.prob = nn.Softmax(dim=-3)
+        self.__init_weights__()
+
+    def __init_weights__(self):
+        for m in self.modules():
+            if type(m) in {nn.Conv2d, nn.ConvTranspose2d}:
+                nn.init.kaiming_normal_(m.weight.data, nonlinearity='relu')
+                if m.bias is not None:
+                    m.bias.data *= 0
 
     def forward(self, x):
         x, skip_connection_4 = self.down_1(x)
@@ -39,8 +46,9 @@ class BuildingsModel(nn.Module):
         x = self.up_2(x, skip_connection_2)
         x = self.up_3(x, skip_connection_3)
         x = self.up_4(x, skip_connection_4)
-        x = self.pred(x)
-        return x
+        z = self.z(x)
+        a = self.prob(x)
+        return z, a
 
 
 class DownSamplingBlock(nn.Module):

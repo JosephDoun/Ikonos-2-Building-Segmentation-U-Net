@@ -113,10 +113,10 @@ class TestModel:
         assert y.size(-3) == x.size(-3) // factor
         
     def test_model_output(self):
-        x = torch.randn(1, 2, 512, 512)
-        x_skip = torch.randn(1, 2, 1024, 1024)
-        model = BuildingsModel(x.size(1), 10)
+        x = torch.randn(3, 4, 512, 512)
+        model = BuildingsModel(x.size(1), 3)
         y = model(x)
         assert y.size(-1) == x.size(-1)
         assert y.size(-2) == x.size(-2)
         assert y.size(-3) == 2
+        assert y.size(-4) == x.size(-4)
