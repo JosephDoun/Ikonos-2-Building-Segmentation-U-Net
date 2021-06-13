@@ -28,7 +28,7 @@ class TrainingEnvironment:
                             type=int)
         parser.add_argument("--batch-size",
                             help="Batch size for training",
-                            default=100,
+                            default=32,
                             type=int)
         parser.add_argument("--num-workers",
                             help="Number of background proceses"
@@ -45,9 +45,9 @@ class TrainingEnvironment:
                             const=1,
                             action='store_const')
         self.argv = parser.parse_args(argv)
-        self.model = self.init_model()
+        self.model = self.__init_model__()
         self.loss_fn = CrossEntropyLoss(reduction='none')
-        self.optimizer = self.init_optimizer()
+        self.optimizer = self.__init_optimizer__()
         if self.argv.report:
             self.report = {}
         
@@ -56,7 +56,7 @@ class TrainingEnvironment:
             "Initiating Buildings U-Net training "
             "with parameters %s" % self.argv
         )
-        training_loader, validation_loader = self._init_loaders()
+        training_loader, validation_loader = self.__init_loaders__()
         for epoch in range(1, self.argv.epochs+1):
             log.info("Epoch %5d of %5d:" % (epoch, self.argv.epochs))
             training_metrics = self.__train_epoch__(training_loader)
@@ -80,7 +80,7 @@ class TrainingEnvironment:
             loss, _loss = self.__compute_loss__(z, Y)
             loss.backward()
             self.optimizer.step()
-            self._compute_metrics_(a, Y, _loss, metrics)
+            self._compute_metrics_(i, a, Y, _loss, metrics)
         return metrics.to('cpu')
         
     def __validate_epoch__(self, validation_loader):
@@ -97,7 +97,7 @@ class TrainingEnvironment:
                 Y = Y.to('cuda')
                 z, a = self.model(X)
                 loss, _loss = self.__compute_loss__(z, Y)
-                self._compute_metrics_(a, Y, _loss, metrics)
+                self._compute_metrics_(i, a, Y, _loss, metrics)
             return metrics.to('cpu')
         
     def __compute_loss__(self, z, Y):
@@ -128,11 +128,13 @@ class TrainingEnvironment:
                                        pin_memory=True)
         return training_loader, validation_loader
     
-    def _compute_metrics_(self, a, Y, loss, metrics: Tensor):
+    def _compute_metrics_(self, i, a, Y, loss, metrics: Tensor):
         _, predictions = a.max(-3)
-        metrics[0] = predictions
-        metrics[1] = Y
-        metrics[2] = loss
+        idx = i * self.argv.batch_size
+        _ = slice(idx,idx+Y.size(0))
+        metrics[0, _] = predictions
+        metrics[1, _] = Y
+        metrics[2, _] = loss
     
     def _compute_accuracies(self, training_metrics, validation_metrics=None):
         pass
