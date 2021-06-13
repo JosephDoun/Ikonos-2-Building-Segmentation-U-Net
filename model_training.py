@@ -15,12 +15,14 @@ from torch.nn import CrossEntropyLoss
 from torch.optim import Adam
 import torch
 
+logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
+log.setLevel(logging.DEBUG)
 
 
 class TrainingEnvironment:
     def __init__(self, argv=sys.argv[1:]) -> None:
+        log.name = type(self).__name__
         parser = argparse.ArgumentParser(description=type(self).__name__)
         parser.add_argument("--epochs",
                             help='Number of epochs for training',
@@ -28,12 +30,12 @@ class TrainingEnvironment:
                             type=int)
         parser.add_argument("--batch-size",
                             help="Batch size for training",
-                            default=32,
+                            default=3,
                             type=int)
         parser.add_argument("--num-workers",
                             help="Number of background proceses"
                                  "for data loading",
-                            default=8,
+                            default=4,
                             type=int)
         parser.add_argument("--lr",
                             help='Learning rate',
@@ -44,13 +46,18 @@ class TrainingEnvironment:
                             default=0,
                             const=1,
                             action='store_const')
+        parser.add_argument("--debug",
+                            help="Produce final graph report",
+                            default=0,
+                            const=1,
+                            action='store_const')
         self.argv = parser.parse_args(argv)
         self.model = self.__init_model__()
         self.loss_fn = CrossEntropyLoss(reduction='none')
         self.optimizer = self.__init_optimizer__()
         if self.argv.report:
             self.report = {}
-        
+
     def start(self):
         log.info(
             "Initiating Buildings U-Net training "
@@ -58,12 +65,13 @@ class TrainingEnvironment:
         )
         training_loader, validation_loader = self.__init_loaders__()
         for epoch in range(1, self.argv.epochs+1):
-            log.info("Epoch %5d of %5d:" % (epoch, self.argv.epochs))
+            log.info("Epoch %3d of %3d:" % (epoch, self.argv.epochs))
             training_metrics = self.__train_epoch__(training_loader)
             validation_metrics = self.__validate_epoch__(validation_loader)
-            self.__log__(Training=training_metrics,
+            self.__log__(epoch,
+                         Training=training_metrics,
                          Validation=validation_metrics)
-        
+
     def __train_epoch__(self, training_loader):
         self.model.train()
         metrics = torch.zeros(
@@ -81,8 +89,17 @@ class TrainingEnvironment:
             loss.backward()
             self.optimizer.step()
             self._compute_metrics_(i, a, Y, _loss, metrics)
+            if self.argv.debug:
+                log.debug(
+                    "Batch %3d / %3d : Training Loss %3.3f" % (
+                        i+1,
+                        -(-len(training_loader.dataset) //
+                        training_loader.batch_size),
+                        loss
+                    )
+                )
         return metrics.to('cpu')
-        
+
     def __validate_epoch__(self, validation_loader):
         with torch.no_grad():
             self.model.eval()
@@ -98,8 +115,17 @@ class TrainingEnvironment:
                 z, a = self.model(X)
                 loss, _loss = self.__compute_loss__(z, Y)
                 self._compute_metrics_(i, a, Y, _loss, metrics)
+                if self.argv.debug:
+                    log.debug(
+                        "Batch %3d / %3d : Validation Loss %3.3f" % (
+                            i+1,
+                            -(-len(validation_loader.dataset)
+                            // validation_loader.batch_size),
+                            loss
+                        )
+                    )        
             return metrics.to('cpu')
-        
+    
     def __compute_loss__(self, z, Y):
         """
             :param z: non-activated output
@@ -107,16 +133,16 @@ class TrainingEnvironment:
         """
         loss = self.loss_fn(z, Y)
         return loss.mean(), loss
-        
+
     def __init_model__(self):
-        model = BuildingsModel(4, 16)
+        model = BuildingsModel(4, 8)
         if torch.cuda.is_available():
             model = model.to('cuda')
-        return model        
-        
+        return model
+
     def __init_optimizer__(self):
         return Adam(self.model.parameters(), lr=self.argv.lr)
-    
+
     def __init_loaders__(self):
         training_loader = DataLoader(Buildings(validation=False),
                                      batch_size=self.argv.batch_size,
@@ -127,19 +153,19 @@ class TrainingEnvironment:
                                        num_workers=self.argv.num_workers,
                                        pin_memory=True)
         return training_loader, validation_loader
-    
+
     def _compute_metrics_(self, i, a, Y, loss, metrics: Tensor):
         _, predictions = a.max(-3)
         idx = i * self.argv.batch_size
-        _ = slice(idx,idx+Y.size(0))
+        _ = slice(idx, idx+Y.size(0))
         metrics[0, _] = predictions
         metrics[1, _] = Y
         metrics[2, _] = loss
-    
+
     def _compute_accuracies(self, training_metrics, validation_metrics=None):
         pass
-    
-    def __log__(self, **metrics):
+
+    def __log__(self, epoch, **metrics):
         for mode, m in metrics.items():
             TP = ((m[0] == 1) & (m[1] == 1)).sum()
             FP = ((m[0] == 1) & (m[1] == 0)).sum()
@@ -149,14 +175,15 @@ class TrainingEnvironment:
             R = TP / (TP + FN)
             F_score = 2 * P * R / (P + R)
             log.info(
-                "%s Loss %f - F1 Score: %f" % (
+                "Epoch %3d of %3d: %s Loss %f - F1 Score: %f" % (
+                    epoch,
+                    self.argv.epochs,
                     mode,
-                    metrics[2].mean(),
+                    m[2].mean(),
                     F_score
                 )
             )
-        
-        
+
+
 if __name__ == "__main__":
     TrainingEnvironment().start()
-    
