@@ -47,7 +47,7 @@ class BuildingsModel(nn.Module):
         x = self.up_3(x, skip_connection_3)
         x = self.up_4(x, skip_connection_4)
         z = self.z(x)
-        a = self.prob(x)
+        a = self.prob(z)
         return z, a
 
 

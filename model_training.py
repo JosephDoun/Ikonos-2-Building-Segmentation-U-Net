@@ -4,6 +4,7 @@ import logging
 import argparse
 import sys
 import os
+from typing import List
 
 from torch.tensor import Tensor
 
@@ -34,9 +35,21 @@ class TrainingEnvironment:
                                  "for data loading",
                             default=8,
                             type=int)
+        parser.add_argument("--lr",
+                            help='Learning rate',
+                            default=0.003,
+                            type=float)
+        parser.add_argument("--report",
+                            help="Produce final graph report",
+                            default=0,
+                            const=1,
+                            action='store_const')
         self.argv = parser.parse_args(argv)
         self.model = self.init_model()
+        self.loss_fn = CrossEntropyLoss(reduction='none')
         self.optimizer = self.init_optimizer()
+        if self.argv.report:
+            self.report = {}
         
     def start(self):
         log.info(
@@ -45,24 +58,55 @@ class TrainingEnvironment:
         )
         training_loader, validation_loader = self._init_loaders()
         for epoch in range(1, self.argv.epochs+1):
-            log.info("message %s" % epoch)
+            log.info("Epoch %5d of %5d:" % (epoch, self.argv.epochs))
             training_metrics = self.__train_epoch__(training_loader)
             validation_metrics = self.__validate_epoch__(validation_loader)
+            self.__log__(Training=training_metrics,
+                         Validation=validation_metrics)
         
-    def __train_epoch__(self, training_loader) -> Tensor:
+    def __train_epoch__(self, training_loader):
         self.model.train()
-        
-        for X, Y in training_loader:
+        metrics = torch.zeros(
+            3,
+            len(training_loader.dataset),
+            512, 512,
+            device='cuda'
+        )
+        for i, (X, Y) in enumerate(training_loader):
+            self.optimizer.zero_grad()
             X = X.to('cuda', non_blocking=True)
             Y = Y.to('cuda', non_blocking=True)
             z, a = self.model(X)
-            loss = self.__compute_loss__(z, Y)
+            loss, _loss = self.__compute_loss__(z, Y)
+            loss.backward()
+            self.optimizer.step()
+            self._compute_metrics_(a, Y, _loss, metrics)
+        return metrics.to('cpu')
         
-    def __validate_epoch__(self, validation_loader) -> Tensor:
-        ...
+    def __validate_epoch__(self, validation_loader):
+        with torch.no_grad():
+            self.model.eval()
+            metrics = torch.zeros(
+                3,
+                len(validation_loader.dataset),
+                512, 512,
+                device='cuda'
+            )
+            for i, (X, Y) in enumerate(validation_loader):
+                X = X.to('cuda')
+                Y = Y.to('cuda')
+                z, a = self.model(X)
+                loss, _loss = self.__compute_loss__(z, Y)
+                self._compute_metrics_(a, Y, _loss, metrics)
+            return metrics.to('cpu')
         
-    def __compute_loss__(self):
-        pass
+    def __compute_loss__(self, z, Y):
+        """
+            :param z: non-activated output
+            :param Y: targets
+        """
+        loss = self.loss_fn(z, Y)
+        return loss.mean(), loss
         
     def __init_model__(self):
         model = BuildingsModel(4, 16)
@@ -71,7 +115,7 @@ class TrainingEnvironment:
         return model        
         
     def __init_optimizer__(self):
-        return Adam(self.model.parameters(), lr=0.002)
+        return Adam(self.model.parameters(), lr=self.argv.lr)
     
     def __init_loaders__(self):
         training_loader = DataLoader(Buildings(validation=False),
@@ -84,12 +128,33 @@ class TrainingEnvironment:
                                        pin_memory=True)
         return training_loader, validation_loader
     
-    def _compute_accuracy_(self):
+    def _compute_metrics_(self, a, Y, loss, metrics: Tensor):
+        _, predictions = a.max(-3)
+        metrics[0] = predictions
+        metrics[1] = Y
+        metrics[2] = loss
+    
+    def _compute_accuracies(self, training_metrics, validation_metrics=None):
         pass
     
-    def __log__(self):
-        pass
+    def __log__(self, **metrics):
+        for mode, m in metrics.items():
+            TP = ((m[0] == 1) & (m[1] == 1)).sum()
+            FP = ((m[0] == 1) & (m[1] == 0)).sum()
+            TN = ((m[0] == 0) & (m[1] == 0)).sum()
+            FN = ((m[0] == 0) & (m[1] == 1)).sum()
+            P = TP / (TP + FP)
+            R = TP / (TP + FN)
+            F_score = 2 * P * R / (P + R)
+            log.info(
+                "%s Loss %f - F1 Score: %f" % (
+                    mode,
+                    metrics[2].mean(),
+                    F_score
+                )
+            )
         
         
 if __name__ == "__main__":
     TrainingEnvironment().start()
+    
