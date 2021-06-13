@@ -63,12 +63,14 @@ class DownSamplingBlock(nn.Module):
                                kernel_size=3,
                                stride=1,
                                padding=1)
+        self.batch_norm1 = nn.BatchNorm2d(out_channels)
         self.activation1 = nn.ReLU()
         self.conv2 = nn.Conv2d(out_channels,
                                out_channels,
                                kernel_size=3,
                                stride=1,
                                padding=1)
+        self.batch_norm2 = nn.BatchNorm2d(out_channels)
         self.activation2 = nn.ReLU()
         if self.max_pooling:
             self.max = nn.MaxPool2d(kernel_size=2,
@@ -76,8 +78,10 @@ class DownSamplingBlock(nn.Module):
 
     def forward(self, x: Tensor) -> Union[Tensor, Tuple[Tensor]]:
         x = self.conv1(x)
+        x = self.batch_norm1(x)
         x = self.activation1(x)
         x = self.conv2(x)
+        x = self.batch_norm2(x)
         x = self.activation2(x)
         skip_connection = x
         if self.max_pooling:
@@ -108,13 +112,16 @@ class UpSamplingBlock(nn.Module):
                                kernel_size=3,
                                stride=1,
                                padding=1)
+        self.batch_norm = nn.BatchNorm2d(out_channels)
         self.activation = nn.ReLU()
 
     def forward(self, x: Tensor, skip_connection: Tensor) -> Tensor:
         x = self.transpose2d(x)
         x = torch.cat([x, skip_connection], -3)
         x = self.conv1(x)
+        x = self.batch_norm(x)
         x = self.activation(x)
         x = self.conv2(x)
+        x = self.batch_norm(x)
         x = self.activation(x)
         return x

@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
 
-class TrainingEnvironment:
+class Training:
     def __init__(self, argv=sys.argv[1:]) -> None:
         log.name = type(self).__name__
         parser = argparse.ArgumentParser(description=type(self).__name__)
@@ -186,4 +186,4 @@ class TrainingEnvironment:
 
 
 if __name__ == "__main__":
-    TrainingEnvironment().start()
+    Training().start()
