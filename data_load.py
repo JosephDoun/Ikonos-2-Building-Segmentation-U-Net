@@ -34,10 +34,10 @@ def to_tiles(array, tile_size=512):
                                              tile_size,
                                              tile_size,
                                              channels)
-        array = np.moveaxis(array, -1, 1)
+        array = np.moveaxis(array, -1, 1) / 2048
 
     elif array.ndim == 2:
-
+        
         array = np.pad(array, ((0, tile_size - array.shape[0] % tile_size),
                                (0, tile_size - array.shape[1] % tile_size)),
                        constant_values=0)
@@ -53,24 +53,35 @@ def to_tiles(array, tile_size=512):
     return array
 
 
+def clean_tiles(X, Y):
+    """
+        Remove empty tiles
+    """
+    idx = X.sum((-3, -2, -1)) == 0
+    X = X[~idx]
+    Y = Y[~idx]
+    return X, Y
+
+
 def make_training_hdf5(tile_size=512):
     """
         Iterate over the training x, y tifs,
         compress them in tiles in hdf5 format
         and get 1/3 per image for validation.
     """
-    for x, y in zip(glob('training/x*.tif'), glob('training/y*.tif')):
+    for x, y in zip(glob('Training/x*.tif'), glob('Training/y*.tif')):
 
         X = gdal_array.LoadFile(x)
         Y = gdal_array.LoadFile(y)
 
-        X_tiles = to_tiles(X, tile_size=tile_size) / 2048
+        X_tiles = to_tiles(X, tile_size=tile_size)
         Y_tiles = to_tiles(Y, tile_size=tile_size)
+        X_tiles, Y_tiles = clean_tiles(X_tiles, Y_tiles)
 
         x_name = x.split("/")[-1].split('.')[-2]
         y_name = y.split("/")[-1].split('.')[-2]
 
-        with h5py.File(name='training/training_data.hdf5', mode='a') as f:
+        with h5py.File(name='Training/training_data.hdf5', mode='a') as f:
             training_x = f.require_group('training/X')
             training_y = f.require_group('training/Y')
 
@@ -138,7 +149,7 @@ class Buildings(Dataset):
                  aug_split=.5):
         self.aug_split = aug_split
         self.validation = validation
-        self.file = h5py.File('training/training_data.hdf5')
+        self.file = h5py.File('Training/training_data.hdf5')
         self.X = self.file['training/X']
         self.Y = self.file['training/Y']
         self.Xv = self.file['validation/X']
@@ -321,5 +332,5 @@ def plot_samples(samples: List[Tuple[Tensor]]):
     plt.show()
 
 
-if not os.path.exists("training/training_data.hdf5"):
+if not os.path.exists("Training/training_data.hdf5"):
     make_training_hdf5()

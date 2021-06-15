@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 
 import logging
-import argparse
 import sys
 import os
 from typing import List
+import numpy as np
 import matplotlib.pyplot as plt
+from CLI_parser import parser
 
 from torch.tensor import Tensor
 
@@ -18,65 +19,22 @@ import torch
 
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
+mpl = logging.getLogger('matplotlib')
 log.setLevel(logging.DEBUG)
+mpl.setLevel(logging.WARNING)
 
 
 class Training:
     def __init__(self, argv=sys.argv[1:]) -> None:
         log.name = type(self).__name__
-        parser = argparse.ArgumentParser(description=type(self).__name__)
-        parser.add_argument("--epochs",
-                            help='Number of epochs for training',
-                            default=100,
-                            type=int)
-        parser.add_argument("--batch-size",
-                            help="Batch size for training",
-                            default=2,
-                            type=int)
-        parser.add_argument("--num-workers",
-                            help="Number of background proceses"
-                                 "for data loading",
-                            default=4,
-                            type=int)
-        parser.add_argument("--lr",
-                            help='Learning rate',
-                            default=0.03,
-                            type=float)
-        parser.add_argument("--report", "-r",
-                            help="Produce final graph report",
-                            default=0,
-                            const=1,
-                            action='store_const')
-        parser.add_argument("--debug", "-d",
-                            help="Print per batch losses",
-                            default=0,
-                            const=1,
-                            action='store_const')
-        parser.add_argument("--monitor", "-m",
-                            help="Plot and monitor a random validation sample",
-                            default=0,
-                            const=1,
-                            action='store_const')
-        parser.add_argument("--l2",
-                            help='L2 Regularization parameter',
-                            default=0,
-                            type=float)
-        parser.add_argument("--dropout",
-                            help='L2 Regularization parameter',
-                            default=0,
-                            type=float)
-        parser.add_argument("--reload",
-                            help='Load checkpoint and continue training',
-                            default=0,
-                            const=1,
-                            action='store_const')
+        parser.description = type(self).__name__
         self.argv = parser.parse_args(argv)
+        if self.argv.reload:
+            self.checkpoint = self.__load_checkpoint__()
         self.model = self.__init_model__()
         self.loss_fn = CrossEntropyLoss(reduction='none')
         self.optimizer = self.__init_optimizer__()
         self.training_loader, self.validation_loader = self.__init_loaders__()
-        if self.argv.reload:
-            self.checkpoint = self.__load_checkpoint__()
         if self.argv.report:
             self.report = {}
         if self.argv.monitor:
@@ -87,11 +45,11 @@ class Training:
                 self.validation_batches, (1,)
             )
             fig, self.axes = plt.subplots(2, 3)
-            plt.ion()
-            plt.show()
-            # Test // Debug
-            self.axes[1, 1].plot([3, 2, 1, 2, 3])
-
+            for ax in self.axes.flat:
+                ax.set_axis_off()
+                ax.get_xaxis().set_visible(False)
+                ax.get_yaxis().set_visible(False)
+            
     def start(self):
         log.info(
             "Initiating Buildings U-Net training "
@@ -105,8 +63,10 @@ class Training:
             self.__log__(epoch,
                          Training=training_metrics,
                          Validation=validation_metrics)
-            if not epoch % 100:
-                self.__checkpoint__(epoch)
+            if not epoch % 100 or epoch == 1:
+                plt.savefig('Monitoring/results_epoch_%d.png' % epoch)
+                if not epoch % 100:
+                    self.__checkpoint__(epoch)
 
     def __train_epoch__(self, epoch, training_loader):
         self.model.train()
@@ -125,7 +85,8 @@ class Training:
             loss.backward()
             self.optimizer.step()
             self._compute_metrics_(i, a, Y, _loss, metrics)
-            if self.argv.monitor and i == self.t_monitor_idx:
+            if all([self.argv.monitor and i == self.t_monitor_idx,
+                    epoch == 1 or not epoch % 100]):
                 self.__monitor_sample__(epoch=epoch,
                                         X=X.cpu().detach().numpy(),
                                         Y=Y.cpu().detach().numpy(),
@@ -148,7 +109,8 @@ class Training:
                 z, a = self.model(X)
                 loss, _loss = self.__compute_loss__(z, Y)
                 self._compute_metrics_(i, a, Y, _loss, metrics)
-                if self.argv.monitor and i == self.v_monitor_idx:
+                if all([self.argv.monitor and i == self.v_monitor_idx,
+                        epoch == 1 or not epoch % 100]):
                     self.__monitor_sample__(epoch=epoch,
                                             X=X.cpu().detach().numpy(),
                                             Y=Y.cpu().detach().numpy(),
@@ -169,7 +131,7 @@ class Training:
         if torch.cuda.is_available():
             model = model.to('cuda')
         if self.argv.reload:
-            model.load_state_dict(self.checkpoint['model'])
+            model.load_state_dict(self.checkpoint['model_state'])
         return model
 
     def __init_optimizer__(self):
@@ -178,7 +140,7 @@ class Training:
                          weight_decay=self.argv.l2,
                          amsgrad=True)
         if self.argv.reload:
-            opt.load_state_dict(self.checkpoint['optimizer'])
+            opt.load_state_dict(self.checkpoint['optimizer_state'])
         return opt
 
     def __init_loaders__(self):
@@ -212,11 +174,11 @@ class Training:
                 'model_state': self.model.state_dict(),
                 'optimizer_state': self.optimizer.state_dict()
             },
-            'checkpoints/checkpoint.pt'
+            'Checkpoints/checkpoint.pt'
         )
 
-    def __load_checkpoint__(self):
-        checkpoint = torch.load('checkpoints/checkpoint.pt')
+    def __load_checkpoint__(self) -> dict:
+        checkpoint = torch.load('Checkpoints/checkpoint.pt')
         return checkpoint
 
     def __log__(self, epoch, **metrics):
@@ -248,16 +210,15 @@ class Training:
         )
 
     def __monitor_sample__(self, **parameters):
-        if not parameters['epoch'] % 50:
-            X = parameters['X'][0, :3]
-            Y = parameters['Y'][0]
-            p = parameters['a'][0].max(-3)
-            self.axes[parameters['mode'], 0].clear()
-            self.axes[parameters['mode'], 0].imshow(X.moveaxis(0, -1))
-            self.axes[parameters['mode'], 1].clear()
-            self.axes[parameters['mode'], 1].imshow(Y)
-            self.axes[parameters['mode'], 2].clear()
-            self.axes[parameters['mode'], 2].imshow(p)
+        X = parameters['X'][0, :3]
+        Y = parameters['Y'][0]
+        p = parameters['a'][0].argmax(-3)
+        self.axes[parameters['mode'], 0].clear()
+        self.axes[parameters['mode'], 0].imshow(np.moveaxis(X, 0, -1))
+        self.axes[parameters['mode'], 1].clear()
+        self.axes[parameters['mode'], 1].imshow(Y)
+        self.axes[parameters['mode'], 2].clear()
+        self.axes[parameters['mode'], 2].imshow(p)
 
 
 if __name__ == "__main__":
