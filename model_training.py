@@ -79,7 +79,7 @@ class Training:
             self.v_monitor_idx = torch.randint(
                 self.validation_batches, (1,)
             )
-            self.fig, self.axes = plt.subplots(2, 3)
+            fig, self.axes = plt.subplots(2, 3)
             plt.ion()
             plt.show()
 
@@ -96,6 +96,8 @@ class Training:
             self.__log__(epoch,
                          Training=training_metrics,
                          Validation=validation_metrics)
+            if not epoch % 100:
+                self.__checkpoint__(epoch)
 
     def __train_epoch__(self, epoch, training_loader):
         self.model.train()
@@ -159,10 +161,11 @@ class Training:
             model = model.to('cuda')
         return model
 
-    def __init_optimizer__(self, l=0):
-        return optim.AdamW(self.model.parameters(),
-                           lr=self.argv.lr,
-                           weight_decay=self.argv.l2)
+    def __init_optimizer__(self):
+        return optim.Adam(self.model.parameters(),
+                          lr=self.argv.lr,
+                          weight_decay=self.argv.l2,
+                          amsgrad=True)
 
     def __init_loaders__(self):
         training_loader = DataLoader(Buildings(validation=False),
@@ -188,17 +191,20 @@ class Training:
         metrics[2, _] = loss
 
     def __checkpoint__(self, epoch):
+        log.info("-- Writing Checkpoint --")
         torch.save(
             {
                 'epoch': epoch,
                 'model_state': self.model.state_dict(),
                 'optimizer_state': self.optimizer.state_dict()
-            }, 'checkpoints/checkpoint.pt'
+            },
+            'checkpoints/checkpoint.pt'
         )
 
     def __load_checkpoint__(self):
-        pass
-
+        checkpoint = torch.load('checkpoints/checkpoint.pt')
+        return checkpoint
+        
     def __log__(self, epoch, **metrics):
         _ = {}
         for mode, m in metrics.items():
@@ -213,8 +219,8 @@ class Training:
             _[mode+'L'] = m[2].mean()
 
         log.info(
-            " [ Epoch %4d of %4d :: %s Loss %2.3f - F Measure: %2.3f ::"
-            " %s Loss %2.3f - F Measure: %2.3f ]"
+            " [ Epoch %4d of %4d :: %s Loss %2.5f - F Measure: %2.5f ::"
+            " %s Loss %2.5f - F Measure: %2.5f ]"
             % (
                 epoch,
                 self.argv.epochs,
