@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 with pytest.warns(DeprecationWarning):
     from data_load import Buildings
 from buildings_unet import BuildingsModel, DownSamplingBlock, UpSamplingBlock
+from model_training import Training
 
 
 class TestDataset:
@@ -120,4 +121,9 @@ class TestModel:
         assert p.size(-2) == x.size(-2)
         assert p.size(-3) == 2
         assert p.size(-4) == x.size(-4)
-        
+    
+
+class TestTraining:
+    training = Training()
+    
+    

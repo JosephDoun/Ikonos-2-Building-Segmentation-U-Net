@@ -90,6 +90,7 @@ def make_training_hdf5(tile_size=512):
             training_x.require_dataset(x_name,
                                        shape=X_train.shape,
                                        compression='gzip',
+                                       compression_opts=8,
                                        track_order=True,
                                        chunks=(1,
                                                4,
@@ -100,6 +101,7 @@ def make_training_hdf5(tile_size=512):
             training_y.require_dataset(y_name,
                                        shape=Y_train.shape,
                                        compression='gzip',
+                                       compression_opts=8,
                                        track_order=True,
                                        chunks=(1,
                                                tile_size,
@@ -212,7 +214,7 @@ class Buildings(Dataset):
                         3: float: factor for saturation rescaling,
                         4: float: factor for hue shift)
         """
-        if self.validation:
+        if self.validation or np.random.random()<.5:
             return img
         
         p = self.transforms['color'].get_params(*args)

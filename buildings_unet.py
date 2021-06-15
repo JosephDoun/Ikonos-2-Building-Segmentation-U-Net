@@ -7,22 +7,31 @@ from torch.tensor import Tensor
 class BuildingsModel(nn.Module):
 
     def __init__(self, in_channels: int,
-                 init_out_factor: int):
+                 init_out_factor: int,
+                 dropout: float=0):
         super().__init__()
         self.down_1 = DownSamplingBlock(in_channels, init_out_factor)
-        self.down_2 = DownSamplingBlock(self.down_1.conv2.out_channels, 2)
-        self.down_3 = DownSamplingBlock(self.down_2.conv2.out_channels, 2)
-        self.down_4 = DownSamplingBlock(self.down_3.conv2.out_channels, 2)
+        self.down_2 = DownSamplingBlock(self.down_1.conv2.out_channels, 2,
+                                        dropout=dropout)
+        self.down_3 = DownSamplingBlock(self.down_2.conv2.out_channels, 2,
+                                        dropout=dropout)
+        self.down_4 = DownSamplingBlock(self.down_3.conv2.out_channels, 2,
+                                        dropout=dropout)
         self.down_5 = DownSamplingBlock(self.down_4.conv2.out_channels, 2,
-                                        max_pooling=False)
+                                        max_pooling=False,
+                                        dropout=dropout)
         self.up_1 = UpSamplingBlock(self.down_5.conv2.out_channels, 2,
-                                    skip_channels=self.down_4.conv2.out_channels)
+                                    skip_channels=self.down_4.conv2.out_channels,
+                                    dropout=dropout)
         self.up_2 = UpSamplingBlock(self.up_1.conv2.out_channels, 2,
-                                    skip_channels=self.down_3.conv2.out_channels)
+                                    skip_channels=self.down_3.conv2.out_channels,
+                                    dropout=dropout)
         self.up_3 = UpSamplingBlock(self.up_2.conv2.out_channels, 2,
-                                    skip_channels=self.down_2.conv2.out_channels)
+                                    skip_channels=self.down_2.conv2.out_channels,
+                                    dropout=dropout)
         self.up_4 = UpSamplingBlock(self.up_3.conv2.out_channels, 2,
-                                    skip_channels=self.down_1.conv2.out_channels)
+                                    skip_channels=self.down_1.conv2.out_channels,
+                                    dropout=dropout)
         self.z = nn.Conv2d(self.up_4.conv2.out_channels,
                            out_channels=2,
                            kernel_size=1)
@@ -54,7 +63,8 @@ class BuildingsModel(nn.Module):
 class DownSamplingBlock(nn.Module):
     def __init__(self, in_channels: int,
                  channel_up_factor: int = 1,
-                 max_pooling: bool = True):
+                 max_pooling: bool = True,
+                 dropout: float=0):
         super().__init__()
         out_channels = in_channels*channel_up_factor
         self.max_pooling = max_pooling
@@ -65,6 +75,7 @@ class DownSamplingBlock(nn.Module):
                                padding=1)
         self.batch_norm1 = nn.BatchNorm2d(out_channels)
         self.activation1 = nn.ReLU()
+        self.dropout1 = nn.Dropout2d(dropout)
         self.conv2 = nn.Conv2d(out_channels,
                                out_channels,
                                kernel_size=3,
@@ -80,6 +91,7 @@ class DownSamplingBlock(nn.Module):
         x = self.conv1(x)
         x = self.batch_norm1(x)
         x = self.activation1(x)
+        x = self.dropout1(x)
         x = self.conv2(x)
         x = self.batch_norm2(x)
         x = self.activation2(x)
@@ -93,7 +105,8 @@ class DownSamplingBlock(nn.Module):
 class UpSamplingBlock(nn.Module):
     def __init__(self, in_channels: int,
                  channel_down_factor: int,
-                 skip_channels: int):
+                 skip_channels: int,
+                 dropout: float=0):
         super().__init__()
         out_channels = in_channels // channel_down_factor
         self.transpose2d = nn.ConvTranspose2d(in_channels,
@@ -114,6 +127,7 @@ class UpSamplingBlock(nn.Module):
                                padding=1)
         self.batch_norm = nn.BatchNorm2d(out_channels)
         self.activation = nn.ReLU()
+        self.dropout = nn.Dropout2d(dropout)
 
     def forward(self, x: Tensor, skip_connection: Tensor) -> Tensor:
         x = self.transpose2d(x)
@@ -121,6 +135,7 @@ class UpSamplingBlock(nn.Module):
         x = self.conv1(x)
         x = self.batch_norm(x)
         x = self.activation(x)
+        x = self.dropout(x)
         x = self.conv2(x)
         x = self.batch_norm(x)
         x = self.activation(x)
