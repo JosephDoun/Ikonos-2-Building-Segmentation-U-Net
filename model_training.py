@@ -65,11 +65,18 @@ class Training:
                             help='L2 Regularization parameter',
                             default=0,
                             type=float)
+        parser.add_argument("--reload",
+                            help='Load checkpoint and continue training',
+                            default=0,
+                            const=1,
+                            action='store_const')
         self.argv = parser.parse_args(argv)
         self.model = self.__init_model__()
         self.loss_fn = CrossEntropyLoss(reduction='none')
         self.optimizer = self.__init_optimizer__()
         self.training_loader, self.validation_loader = self.__init_loaders__()
+        if self.argv.reload:
+            self.checkpoint = self.__load_checkpoint__()
         if self.argv.report:
             self.report = {}
         if self.argv.monitor:
@@ -82,6 +89,8 @@ class Training:
             fig, self.axes = plt.subplots(2, 3)
             plt.ion()
             plt.show()
+            # Test // Debug
+            self.axes[1, 1].plot([3, 2, 1, 2, 3])
 
     def start(self):
         log.info(
@@ -159,13 +168,18 @@ class Training:
         model = BuildingsModel(4, 8)
         if torch.cuda.is_available():
             model = model.to('cuda')
+        if self.argv.reload:
+            model.load_state_dict(self.checkpoint['model'])
         return model
 
     def __init_optimizer__(self):
-        return optim.Adam(self.model.parameters(),
-                          lr=self.argv.lr,
-                          weight_decay=self.argv.l2,
-                          amsgrad=True)
+        opt = optim.Adam(self.model.parameters(),
+                         lr=self.argv.lr,
+                         weight_decay=self.argv.l2,
+                         amsgrad=True)
+        if self.argv.reload:
+            opt.load_state_dict(self.checkpoint['optimizer'])
+        return opt
 
     def __init_loaders__(self):
         training_loader = DataLoader(Buildings(validation=False),
@@ -191,7 +205,7 @@ class Training:
         metrics[2, _] = loss
 
     def __checkpoint__(self, epoch):
-        log.info("-- Writing Checkpoint --")
+        log.info("  -- Writing Checkpoint --")
         torch.save(
             {
                 'epoch': epoch,
@@ -204,7 +218,7 @@ class Training:
     def __load_checkpoint__(self):
         checkpoint = torch.load('checkpoints/checkpoint.pt')
         return checkpoint
-        
+
     def __log__(self, epoch, **metrics):
         _ = {}
         for mode, m in metrics.items():
