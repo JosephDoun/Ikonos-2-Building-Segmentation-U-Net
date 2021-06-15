@@ -134,7 +134,9 @@ def make_training_hdf5(tile_size=512):
                 
                 
 class Buildings(Dataset):
-    def __init__(self, validation: bool=False):
+    def __init__(self, validation: bool=False,
+                 aug_split=.5):
+        self.aug_split = aug_split
         self.validation = validation
         self.file = h5py.File('training/training_data.hdf5')
         self.X = self.file['training/X']
@@ -199,7 +201,7 @@ class Buildings(Dataset):
     # def _adjust_brightness_(img: Tensor, factor: float):
     #     return img*factor
     
-    def _random_color_jitter_(self, img: Tensor, *args: List[float]):
+    def _random_color_jitter_(self, img: Tensor, *args: List[float], **kwargs):
         """
             img: 4 dimensional Tensor of 4 channels
             args: ColorJitter min-maxes
@@ -214,7 +216,7 @@ class Buildings(Dataset):
                         3: float: factor for saturation rescaling,
                         4: float: factor for hue shift)
         """
-        if self.validation or np.random.random()<.5:
+        if self.validation or kwargs['R'] < (1-self.aug_split):
             return img
         
         p = self.transforms['color'].get_params(*args)
@@ -234,8 +236,8 @@ class Buildings(Dataset):
         img[[1, 2]] = img[[1, 2]] / 2
         return img
             
-    def _random_rotation_(self, img: List[Tensor]):
-        if self.validation:
+    def _random_rotation_(self, img: List[Tensor], R):
+        if self.validation or R < (1-self.aug_split):
             return img[0], img[1]
         p = self.transforms['rotate'].get_params(self._p['rotation'])
         img[0], img[1] = F.rotate(img[0], p), F.rotate(img[1], p)
@@ -259,6 +261,7 @@ class Buildings(Dataset):
                      If it is the first Dataset, simply
                      return <index>.
         """
+        R = np.random.random()
         if not self.validation:
             grp_idx = list(map(lambda x: min(x, index),
                            self._cum_train_len)).index(index)
@@ -285,8 +288,10 @@ class Buildings(Dataset):
                                            self._p['brightness'],
                                            self._p['contrast'],
                                            self._p['saturation'],
-                                           self._p['hue'])
-        image, label = self._random_rotation_([image, label.unsqueeze(0)])
+                                           self._p['hue'],
+                                           R=R)
+        image, label = self._random_rotation_([image, label.unsqueeze(0)],
+                                              R)
         return image, label.to(torch.long).squeeze(0)
 
     def _get_group_(self, index):
