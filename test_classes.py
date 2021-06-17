@@ -73,9 +73,7 @@ class TestDataset:
             if not torch.equal(self.training[idx_t][0],
                                self.training[idx_t][0]):
                 successes += 1
-        assert successes > 0, "Data Augmentation Test Failed"
-    # def test_data_return_slice(self):
-    #     assert TestData.dataset[10:15]
+        assert 10 > successes > 0, "Data Augmentation Test Failed"
 
 
 class TestDataloader:

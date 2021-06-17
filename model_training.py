@@ -32,7 +32,8 @@ class Training:
         if self.argv.reload:
             self.checkpoint = self.__load_checkpoint__()
         self.model = self.__init_model__()
-        self.loss_fn = CrossEntropyLoss(reduction='none')
+        self.loss_fn = CrossEntropyLoss(weight=torch.Tensor([1., 2.]).cuda(),
+                                        reduction='none')
         self.optimizer = self.__init_optimizer__()
         self.training_loader, self.validation_loader = self.__init_loaders__()
         if self.argv.report:
@@ -44,7 +45,7 @@ class Training:
             self.v_monitor_idx = torch.randint(
                 self.validation_batches, (1,)
             )
-            fig, self.axes = plt.subplots(2, 3)
+            self.fig, self.axes = plt.subplots(2, 3)
             for ax in self.axes.flat:
                 ax.set_axis_off()
                 ax.get_xaxis().set_visible(False)
@@ -63,10 +64,11 @@ class Training:
             self.__log__(epoch,
                          Training=training_metrics,
                          Validation=validation_metrics)
+            if not epoch % 100:
+                self.__checkpoint__(epoch)
             if not epoch % 100 or epoch == 1:
+                log.info("  -- Monitoring Active: Saving sample image --")
                 plt.savefig('Monitoring/results_epoch_%d.png' % epoch)
-                if not epoch % 100:
-                    self.__checkpoint__(epoch)
 
     def __train_epoch__(self, epoch, training_loader):
         self.model.train()
@@ -127,7 +129,7 @@ class Training:
         return loss.mean(), loss
 
     def __init_model__(self):
-        model = BuildingsModel(4, 8)
+        model = BuildingsModel(4, 8, dropout=self.argv.dropout)
         if torch.cuda.is_available():
             model = model.to('cuda')
         if self.argv.reload:
@@ -138,7 +140,7 @@ class Training:
         opt = optim.Adam(self.model.parameters(),
                          lr=self.argv.lr,
                          weight_decay=self.argv.l2,
-                         amsgrad=True)
+                         betas=(.99, .99))
         if self.argv.reload:
             opt.load_state_dict(self.checkpoint['optimizer_state'])
         return opt
@@ -213,12 +215,21 @@ class Training:
         X = parameters['X'][0, :3]
         Y = parameters['Y'][0]
         p = parameters['a'][0].argmax(-3)
+        self.fig.sup_title('Epoch %d' % parameters['epoch'])
         self.axes[parameters['mode'], 0].clear()
         self.axes[parameters['mode'], 0].imshow(np.moveaxis(X, 0, -1))
         self.axes[parameters['mode'], 1].clear()
         self.axes[parameters['mode'], 1].imshow(Y)
         self.axes[parameters['mode'], 2].clear()
         self.axes[parameters['mode'], 2].imshow(p)
+        self.axes[0, 0].set_title('X')
+        self.axes[0, 0].set_xlabel('Training', rotation='vertical')
+        self.axes[0, 1].set_title('Y')
+        self.axes[0, 2].set_title('y_hat')
+        self.axes[1, 0].set_title('X')
+        self.axes[1, 0].set_ylabel('Validation', rotation='vertical')
+        self.axes[1, 1].set_title('Y')
+        self.axes[1, 2].set_title('y_hat')
 
 
 if __name__ == "__main__":
