@@ -57,9 +57,9 @@ def clean_tiles(X, Y):
     """
         Remove empty tiles
     """
-    idx = X.sum((-3, -2, -1)) == 0
-    X = X[~idx]
-    Y = Y[~idx]
+    idx = X.mean((-3, -2, -1)) >= 0.02
+    X = X[idx]
+    Y = Y[idx]
     return X, Y
 
 
@@ -78,6 +78,7 @@ def make_training_hdf5(tile_size=512):
         Y_tiles = to_tiles(Y, tile_size=tile_size)
         X_tiles, Y_tiles = clean_tiles(X_tiles, Y_tiles)
 
+        # Get file names minus the extension
         x_name = x.split("/")[-1].split('.')[-2]
         y_name = y.split("/")[-1].split('.')[-2]
 
