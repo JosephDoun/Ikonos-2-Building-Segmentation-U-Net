@@ -17,7 +17,12 @@ from torch.nn import CrossEntropyLoss
 import torch.optim as optim
 import torch
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(
+    format='%(asctime)s %(levelname)s:%(name)s: %(message)s',
+    level=logging.DEBUG,
+    datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
 log = logging.getLogger(__name__)
 mpl = logging.getLogger('matplotlib')
 log.setLevel(logging.DEBUG)
@@ -28,9 +33,11 @@ class Training:
     def __init__(self, argv=sys.argv[1:]) -> None:
         log.name = type(self).__name__
         parser.description = type(self).__name__
+        self.epoch = 1
         self.argv = parser.parse_args(argv)
         if self.argv.reload:
             self.checkpoint = self.__load_checkpoint__()
+            self.epoch = self.checkpoint['epoch']
         self.model = self.__init_model__()
         self.loss_fn = CrossEntropyLoss(weight=torch.Tensor([1., 2.]).cuda(),
                                         reduction='none')
@@ -53,10 +60,10 @@ class Training:
             
     def start(self):
         log.info(
-            "Initiating Buildings U-Net training "
-            "with parameters %s" % self.argv
+            "[ Initiating Buildings U-Net Training "
+            "with parameters %s ]" % self.argv
         )
-        for epoch in range(1, self.argv.epochs+1):
+        for epoch in range(self.epoch, self.argv.epochs+1):
             training_metrics = self.__train_epoch__(epoch,
                                                     self.training_loader)
             validation_metrics = self.__validate_epoch__(epoch,
@@ -129,7 +136,8 @@ class Training:
         return loss.mean(), loss
 
     def __init_model__(self):
-        model = BuildingsModel(4, 8, dropout=self.argv.dropout)
+        model = BuildingsModel(4, self.argv.init_scale,
+                               dropout=self.argv.dropout)
         if torch.cuda.is_available():
             model = model.to('cuda')
         if self.argv.reload:
@@ -197,7 +205,7 @@ class Training:
             _[mode+'L'] = m[2].mean()
 
         log.info(
-            " [ Epoch %4d of %4d :: %s Loss %2.5f - F Measure: %2.5f ::"
+            "[ Epoch %4d of %4d :: %s Loss %2.5f - F Measure: %2.5f ::"
             " %s Loss %2.5f - F Measure: %2.5f ]"
             % (
                 epoch,
@@ -215,7 +223,7 @@ class Training:
         X = parameters['X'][0, :3]
         Y = parameters['Y'][0]
         p = parameters['a'][0].argmax(-3)
-        self.fig.sup_title('Epoch %d' % parameters['epoch'])
+        self.fig.suptitle('Epoch %d' % parameters['epoch'])
         self.axes[parameters['mode'], 0].clear()
         self.axes[parameters['mode'], 0].imshow(np.moveaxis(X, 0, -1))
         self.axes[parameters['mode'], 1].clear()
