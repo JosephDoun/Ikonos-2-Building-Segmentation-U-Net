@@ -53,3 +53,7 @@ parser.add_argument("--init-scale",
                          "in_channels*init_scale = out_channels",
                     default=8,
                     type=int)
+parser.add_argument("--checkpoint",
+                    help="Path to saved checkpoint",
+                    default="Checkpoints/checkpoint.pt",
+                    type=str)

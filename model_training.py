@@ -188,7 +188,7 @@ class Training:
         )
 
     def __load_checkpoint__(self) -> dict:
-        checkpoint = torch.load('Checkpoints/checkpoint.pt')
+        checkpoint = torch.load(self.argv.checkpoint)
         return checkpoint
 
     def __log__(self, epoch, **metrics):
