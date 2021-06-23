@@ -5,7 +5,7 @@ from torch.tensor import Tensor
 from torch.utils.data import DataLoader
 with pytest.warns(DeprecationWarning):
     from data_load import Buildings
-from buildings_unet import BuildingsModel, DownSamplingBlock, UpSamplingBlock
+from model_architecture import BuildingsModel, DownSamplingBlock, UpSamplingBlock
 from model_training import Training
 
 
