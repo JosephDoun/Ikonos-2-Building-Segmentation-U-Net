@@ -6,14 +6,15 @@ import os
 from typing import List
 import numpy as np
 import matplotlib.pyplot as plt
+from torch.functional import norm
 from CLI_parser import parser
 
 from torch.tensor import Tensor
 
-from buildings_unet import BuildingsModel
+from model_architecture import BuildingsModel
 from torch.utils.data import DataLoader
 from data_load import Buildings
-from torch.nn import CrossEntropyLoss
+from torch.nn import CrossEntropyLoss, parameter
 import torch.optim as optim
 import torch
 
@@ -21,7 +22,7 @@ logging.basicConfig(
     format='%(asctime)s %(levelname)s:%(name)s: %(message)s',
     level=logging.DEBUG,
     datefmt='%Y-%m-%d %H:%M:%S'
-    )
+)
 
 log = logging.getLogger(__name__)
 mpl = logging.getLogger('matplotlib')
@@ -57,7 +58,8 @@ class Training:
                 ax.set_axis_off()
                 ax.get_xaxis().set_visible(False)
                 ax.get_yaxis().set_visible(False)
-            
+        # self.__init_scheduler__()
+
     def start(self):
         log.info(
             "[ Initiating Buildings U-Net Training "
@@ -75,7 +77,11 @@ class Training:
                 self.__checkpoint__(epoch)
             if not epoch % 100 or epoch == 1:
                 log.info("  -- Monitoring Active: Saving sample image --")
-                plt.savefig('Monitoring/results_epoch_%d.png' % epoch)
+                self.fig.savefig('Monitoring/Predictions/results_epoch_%d.png'
+                                 % epoch)
+                self.__monitor_weights__(epoch)
+                # self.__adjust_learning_rates__(layer_abs_means)
+            # self.scheduler.step(training_metrics[-1].mean())
 
     def __train_epoch__(self, epoch, training_loader):
         self.model.train()
@@ -145,13 +151,25 @@ class Training:
         return model
 
     def __init_optimizer__(self):
-        opt = optim.Adam(self.model.parameters(),
+        opt = optim.Adam([{'params': p} for p in self.model.parameters()],
                          lr=self.argv.lr,
                          weight_decay=self.argv.l2,
                          betas=(.99, .99))
         if self.argv.reload:
             opt.load_state_dict(self.checkpoint['optimizer_state'])
+            for group in opt.param_groups:
+                group['lr'] = self.argv.lr
+                group['weight_decay'] = self.argv.l2
         return opt
+
+    # def __init_scheduler__(self):
+    #     self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,
+    #                                                           'min',
+    #                                                           0.5,
+    #                                                           patience=10,
+    #                                                           verbose=True)
+    #     if self.argv.reload:
+    #         self.scheduler.load_state_dict(self.checkpoint['scheduler_state'])
 
     def __init_loaders__(self):
         training_loader = DataLoader(Buildings(validation=False),
@@ -182,9 +200,10 @@ class Training:
             {
                 'epoch': epoch,
                 'model_state': self.model.state_dict(),
-                'optimizer_state': self.optimizer.state_dict()
+                'optimizer_state': self.optimizer.state_dict(),
+                # 'scheduler_state': self.scheduler.state_dict()
             },
-            'Checkpoints/checkpoint.pt'
+            self.argv.checkpoint
         )
 
     def __load_checkpoint__(self) -> dict:
@@ -219,8 +238,44 @@ class Training:
             )
         )
 
+    def __monitor_weights__(self, epoch):
+        means = []
+        variances = []
+        labels = []
+
+        for label, parameter in self.model.named_parameters():
+
+            if label.endswith('.weight'):
+                labels.append(label)
+                means.append(parameter.cpu().detach().abs().mean())
+                variances.append(parameter.cpu().detach()
+                                 .mean((-3, -2, -1)).var())
+
+        means = np.array(means)
+        means = means / means.max()
+
+        fig, axes = plt.subplots(1, 2)
+        fig.suptitle("Epoch %d" % epoch)
+
+        x = np.arange(len(labels))
+        axes[0].bar(x, means, color='#aa99ff',
+                    label='absolute mean', width=.8)
+        axes[1].bar(x, variances, color='#ff99aa', label='variance',
+                    width=.8)
+        axes[0].legend(), axes[1].legend()
+        fig.savefig("Monitoring/Weights/%d.png" % epoch)
+
+        # return means
+
+    # def __adjust_learning_rates__(self, means):
+    #     i=0
+    #     for p_grp in self.optimizer.param_groups:
+    #         if p_grp['params'][0].dim() > 1:
+    #             p_grp['lr'] = self.argv.lr / means[i]
+    #             i += 1
+
     def __monitor_sample__(self, **parameters):
-        X = parameters['X'][0, :3]
+        X = parameters['X'][0, [2, 1, 0]]
         Y = parameters['Y'][0]
         p = parameters['a'][0].argmax(-3)
         self.fig.suptitle('Epoch %d' % parameters['epoch'])
