@@ -7,6 +7,7 @@ from typing import List
 import numpy as np
 import matplotlib.pyplot as plt
 from torch.functional import norm
+from torch.nn.modules import activation
 from CLI_parser import parser
 
 from torch.tensor import Tensor
@@ -40,7 +41,7 @@ class Training:
             self.checkpoint = self.__load_checkpoint__()
             self.epoch = self.checkpoint['epoch']
         self.model = self.__init_model__()
-        self.loss_fn = CrossEntropyLoss(weight=torch.Tensor([1., 2.]).cuda(),
+        self.loss_fn = CrossEntropyLoss(weight=torch.Tensor([1., 1.]).cuda(),
                                         reduction='none')
         self.optimizer = self.__init_optimizer__()
         self.training_loader, self.validation_loader = self.__init_loaders__()
@@ -58,7 +59,7 @@ class Training:
                 ax.set_axis_off()
                 ax.get_xaxis().set_visible(False)
                 ax.get_yaxis().set_visible(False)
-        # self.__init_scheduler__()
+        self.__init_scheduler__()
 
     def start(self):
         log.info(
@@ -68,6 +69,10 @@ class Training:
         for epoch in range(self.epoch, self.argv.epochs+1):
             training_metrics = self.__train_epoch__(epoch,
                                                     self.training_loader)
+            
+            if epoch == 1 or not epoch % 100:
+                self.model._register_hooks_()
+                
             validation_metrics = self.__validate_epoch__(epoch,
                                                          self.validation_loader)
             self.__log__(epoch,
@@ -79,9 +84,10 @@ class Training:
                 log.info("  -- Monitoring Active: Saving sample image --")
                 self.fig.savefig('Monitoring/Predictions/results_epoch_%d.png'
                                  % epoch)
-                self.__monitor_weights__(epoch)
+                self.__monitor_layers__(epoch)
                 # self.__adjust_learning_rates__(layer_abs_means)
-            # self.scheduler.step(training_metrics[-1].mean())
+            # Feed validation loss to the scheduler
+            self.scheduler.step(validation_metrics[-1].mean())
 
     def __train_epoch__(self, epoch, training_loader):
         self.model.train()
@@ -162,20 +168,22 @@ class Training:
                 group['weight_decay'] = self.argv.l2
         return opt
 
-    # def __init_scheduler__(self):
-    #     self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,
-    #                                                           'min',
-    #                                                           0.5,
-    #                                                           patience=10,
-    #                                                           verbose=True)
-    #     if self.argv.reload:
-    #         self.scheduler.load_state_dict(self.checkpoint['scheduler_state'])
+    def __init_scheduler__(self):
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,
+                                                              'min',
+                                                              0.1,
+                                                              patience=100,
+                                                              verbose=True)
+        if self.argv.reload:
+            self.scheduler.load_state_dict(self.checkpoint['scheduler_state'])
 
     def __init_loaders__(self):
-        training_loader = DataLoader(Buildings(validation=False),
+        training_loader = DataLoader(Buildings(validation=False,
+                                               aug_split=self.argv.augmentation),
                                      batch_size=self.argv.batch_size,
                                      num_workers=self.argv.num_workers,
-                                     pin_memory=True)
+                                     pin_memory=True,
+                                     shuffle=True)
         validation_loader = DataLoader(Buildings(validation=True),
                                        batch_size=self.argv.batch_size,
                                        num_workers=self.argv.num_workers,
@@ -201,7 +209,7 @@ class Training:
                 'epoch': epoch,
                 'model_state': self.model.state_dict(),
                 'optimizer_state': self.optimizer.state_dict(),
-                # 'scheduler_state': self.scheduler.state_dict()
+                'scheduler_state': self.scheduler.state_dict()
             },
             self.argv.checkpoint
         )
@@ -220,52 +228,62 @@ class Training:
             P = TP / (TP + FP)
             R = TP / (TP + FN)
             F_score = 2 * (P * R) / (P + R)
+            IOU = TP / (TP + FP + FN)
             _[mode+'F'] = F_score
             _[mode+'L'] = m[2].mean()
+            _[mode+'IOU'] = IOU
 
         log.info(
-            "[ Epoch %4d of %4d :: %s Loss %2.5f - F Measure: %2.5f ::"
-            " %s Loss %2.5f - F Measure: %2.5f ]"
+            "[ Epoch %4d of %4d :: %s Loss %2.5f - IoU: %2.5f ::"
+            " %s Loss %2.5f - IoU: %2.5f / F: %2.5f ]"
             % (
                 epoch,
                 self.argv.epochs,
                 'Training',
                 _['TrainingL'],
-                _['TrainingF'],
+                _['TrainingIOU'],
                 'Validation',
                 _['ValidationL'],
+                _['ValidationIOU'],
                 _['ValidationF']
             )
         )
 
-    def __monitor_weights__(self, epoch):
-        means = []
-        variances = []
-        labels = []
-
-        for label, parameter in self.model.named_parameters():
-
-            if label.endswith('.weight'):
-                labels.append(label)
-                means.append(parameter.cpu().detach().abs().mean())
-                variances.append(parameter.cpu().detach()
-                                 .mean((-3, -2, -1)).var())
-
-        means = np.array(means)
-        means = means / means.max()
-
-        fig, axes = plt.subplots(1, 2)
+    def __monitor_layers__(self, epoch):
+        
+        fig, axes = plt.subplots(3, 6, figsize=(15, 10))
+        axes = axes.flatten()
         fig.suptitle("Epoch %d" % epoch)
-
-        x = np.arange(len(labels))
-        axes[0].bar(x, means, color='#aa99ff',
-                    label='absolute mean', width=.8)
-        axes[1].bar(x, variances, color='#ff99aa', label='variance',
-                    width=.8)
-        axes[0].legend(), axes[1].legend()
+        
+        for i, (name, activation) in enumerate(self.model.activations.items()):
+            axes[i].set_title(name)
+            hist = np.array(
+                list(
+                    map(
+                        lambda x: np.histogram(x, bins=20)[0],
+                        # Reshape the batch sample to features * values
+                        # Get histogram for each feature
+                        activation[0].reshape(activation[0].size(0), -1)
+                        )
+                    )
+                )
+            
+            # Normalize each row for full brightness
+            hist = hist / np.expand_dims(hist.max(-1), 1)
+            axes[i].imshow(hist, aspect='auto', cmap='Reds')
+            
+            # bins = np.array(
+            #     list(
+            #         map(
+            #             lambda x: np.histogram(x, bins=20)[1],
+            #             activation[0].reshape(activation.size(1), -1)
+            #         )
+            #     )
+            # )
+        
+        fig.tight_layout()
         fig.savefig("Monitoring/Weights/%d.png" % epoch)
-
-        # return means
+        self.model.activations = {}
 
     # def __adjust_learning_rates__(self, means):
     #     i=0
