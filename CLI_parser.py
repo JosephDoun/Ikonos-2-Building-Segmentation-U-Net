@@ -9,7 +9,7 @@ parser.add_argument("--epochs",
                     type=int)
 parser.add_argument("--batch-size",
                     help="Batch size for training",
-                    default=2,
+                    default=1,
                     type=int)
 parser.add_argument("--num-workers",
                     help="Number of background proceses"
@@ -57,3 +57,8 @@ parser.add_argument("--checkpoint",
                     help="Path to saved checkpoint",
                     default="Checkpoints/checkpoint.pt",
                     type=str)
+parser.add_argument("--augmentation", "-a",
+                    help="Float within [0, 1], training samples percentage"
+                    "to augment",
+                    default=.5,
+                    type=float)
