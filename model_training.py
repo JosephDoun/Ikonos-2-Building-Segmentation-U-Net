@@ -3,11 +3,9 @@
 import logging
 import sys
 import os
-from typing import List
+from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
-from torch.functional import norm
-from torch.nn.modules import activation
 from CLI_parser import parser
 
 from torch.tensor import Tensor
@@ -148,8 +146,7 @@ class Training:
         return loss.mean(), loss
 
     def __init_model__(self):
-        model = BuildingsModel(4, self.argv.init_scale,
-                               dropout=self.argv.dropout)
+        model = BuildingsModel(4, self.argv.init_scale)
         if torch.cuda.is_available():
             model = model.to('cuda')
         if self.argv.reload:
@@ -157,15 +154,14 @@ class Training:
         return model
 
     def __init_optimizer__(self):
-        opt = optim.Adam([{'params': p} for p in self.model.parameters()],
+        opt = optim.Adam([{'params': p} for n, p in self.model.named_parameters()],
                          lr=self.argv.lr,
                          weight_decay=self.argv.l2,
                          betas=(.99, .99))
+        # for i, group in enumerate(opt.param_groups):
+        #         group['weight_decay'] = self.argv.l2 / (i+1)
         if self.argv.reload:
             opt.load_state_dict(self.checkpoint['optimizer_state'])
-            for group in opt.param_groups:
-                group['lr'] = self.argv.lr
-                group['weight_decay'] = self.argv.l2
         return opt
 
     def __init_scheduler__(self):
@@ -173,7 +169,8 @@ class Training:
                                                               'min',
                                                               0.1,
                                                               patience=100,
-                                                              verbose=True)
+                                                              verbose=True,
+                                                              min_lr=5e-7)
         if self.argv.reload:
             self.scheduler.load_state_dict(self.checkpoint['scheduler_state'])
 
@@ -285,12 +282,8 @@ class Training:
         fig.savefig("Monitoring/Weights/%d.png" % epoch)
         self.model.activations = {}
 
-    # def __adjust_learning_rates__(self, means):
-    #     i=0
-    #     for p_grp in self.optimizer.param_groups:
-    #         if p_grp['params'][0].dim() > 1:
-    #             p_grp['lr'] = self.argv.lr / means[i]
-    #             i += 1
+    def __save_report__(self):
+        pass
 
     def __monitor_sample__(self, **parameters):
         X = parameters['X'][0, [2, 1, 0]]

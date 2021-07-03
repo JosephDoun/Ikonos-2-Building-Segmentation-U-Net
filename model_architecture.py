@@ -9,34 +9,32 @@ from torch.tensor import Tensor
 class BuildingsModel(nn.Module):
 
     def __init__(self, in_channels: int,
-                 init_out_factor: int,
-                 dropout: float = 0):
+                 init_out_factor: int):
         super().__init__()
         self.hooks = {}
         self.down_1 = DownSamplingBlock(in_channels, init_out_factor,
-                                        dropout=(0.1, 0.1))
+                                        dropout=(0.0, 0.0))
         self.down_2 = DownSamplingBlock(self.down_1.conv2.out_channels, 2,
-                                        dropout=(0.1, 0.1))
+                                        dropout=(0.0, 0.0))
         self.down_3 = DownSamplingBlock(self.down_2.conv2.out_channels, 2,
-                                        dropout=(0.2, 0.2))
+                                        dropout=(0.3, 0.3))
         self.down_4 = DownSamplingBlock(self.down_3.conv2.out_channels, 2,
-                                        dropout=(0.2, 0.3))
+                                        dropout=(0.3, 0.4))
         self.down_5 = DownSamplingBlock(self.down_4.conv2.out_channels, 2,
                                         max_pooling=False,
-                                        dropout=(0.35, 0.35))
+                                        dropout=(0, 0.3))
         self.up_1 = UpSamplingBlock(self.down_5.conv2.out_channels, 2,
                                     skip_channels=self.down_4.conv2.out_channels,
-                                    dropout=(0.25, 0.25))
+                                    dropout=(0, 0.3))
         self.up_2 = UpSamplingBlock(self.up_1.conv2.out_channels, 2,
                                     skip_channels=self.down_3.conv2.out_channels,
-                                    dropout=(0.2, 0.2))
+                                    dropout=(0.3, 0.3))
         self.up_3 = UpSamplingBlock(self.up_2.conv2.out_channels, 2,
                                     skip_channels=self.down_2.conv2.out_channels,
-                                    dropout=(0.1, 0.1))
+                                    dropout=(0.2, 0.2))
         self.up_4 = UpSamplingBlock(self.up_3.conv2.out_channels, 2,
                                     skip_channels=self.down_1.conv2.out_channels,
-                                    dropout=(0.1, 0.1))
-        self.dropout = nn.Dropout2d(dropout)
+                                    dropout=(0, 0))
         self.z = nn.Conv2d(self.up_4.conv2.out_channels,
                            out_channels=2,
                            kernel_size=1)
@@ -49,16 +47,16 @@ class BuildingsModel(nn.Module):
                 fan_in, fan_out = \
                 nn.init._calculate_fan_in_and_fan_out(m.weight.data)
                 std = np.sqrt(2 / fan_in)
-                nn.init.normal_(m.weight.data, 0, std)
-                # nn.init.kaiming_normal_(m.weight.data,
-                #                         mode='fan_in',
-                #                         nonlinearity='relu')
+                # nn.init.normal_(m.weight.data, 0, std)
+                nn.init.kaiming_normal_(m.weight.data,
+                                        mode='fan_in',
+                                        nonlinearity='relu')
                 if m.bias is not None:
                     fan_in, fan_out = \
                     nn.init._calculate_fan_in_and_fan_out(m.weight.data)
                     std = 1 / np.sqrt(fan_in)
                     # nn.init.normal_(m.bias, 0, std)
-                    m.bias.data.zero_()
+                    m.bias.data.fill_(0)
 
     def _register_hooks_(self):
         self.activations = {}
@@ -101,7 +99,6 @@ class DownSamplingBlock(nn.Module):
                                kernel_size=3,
                                stride=1,
                                padding=1)
-        # self.batch_norm1 = nn.BatchNorm2d(out_channels)
         self.activation1 = nn.ReLU()
         self.dropout1 = nn.Dropout2d(dropout[0])
         self.conv2 = nn.Conv2d(out_channels,
@@ -109,7 +106,6 @@ class DownSamplingBlock(nn.Module):
                                kernel_size=3,
                                stride=1,
                                padding=1)
-        # self.batch_norm2 = nn.BatchNorm2d(out_channels)
         self.activation2 = nn.ReLU()
         self.dropout2 = nn.Dropout2d(dropout[1])
         if self.max_pooling:

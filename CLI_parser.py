@@ -39,10 +39,6 @@ parser.add_argument("--l2",
                     help='L2 Regularization parameter',
                     default=0,
                     type=float)
-parser.add_argument("--dropout",
-                    help='L2 Regularization parameter',
-                    default=0,
-                    type=float)
 parser.add_argument("--reload",
                     help='Load checkpoint and continue training',
                     default=0,
