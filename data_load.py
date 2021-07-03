@@ -183,7 +183,7 @@ class Buildings(Dataset):
             'brightness': (.5, 1.5),
             'contrast': (.5, 1.5),
             'saturation': (.5, 1.5),
-            'hue': (-.2, .2)
+            'hue': (-.01, .01)
         }
         self.transforms = {
                 "rotate": transforms.RandomRotation(self._p['rotation']),
