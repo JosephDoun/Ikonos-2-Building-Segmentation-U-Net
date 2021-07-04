@@ -1,9 +1,11 @@
 #!/usr/bin/python3
 
 import logging
+import re
 import sys
 import os
 from typing import List, Tuple
+from cffi import model
 import numpy as np
 import matplotlib.pyplot as plt
 from CLI_parser import parser
@@ -154,7 +156,24 @@ class Training:
         return model
 
     def __init_optimizer__(self):
-        opt = optim.Adam([{'params': p} for n, p in self.model.named_parameters()],
+        opt = optim.Adam([
+            {'params': self.model.down_1.parameters()},
+            {'params': self.model.down_2.parameters()},
+            {'params': self.model.down_3.parameters(),
+             'weight_decay': 0.00003},
+            {'params': self.model.down_4.parameters(),
+             'weight_decay': 0.00010},
+            {'params': self.model.down_5.parameters(),
+             'weight_decay': 0.00010},
+            {'params': self.model.up_1.parameters(),
+             'weight_decay': 0.00010},
+            {'params': self.model.up_2.parameters(),
+             'weight_decay': 0.00003},
+            {'params': self.model.up_3.parameters()},
+            {'params': self.model.up_4.parameters()},
+            {'params': [*self.model.z.parameters(),
+                        *self.model.prob.parameters()]}
+            ],
                          lr=self.argv.lr,
                          weight_decay=self.argv.l2,
                          betas=(.99, .99))
