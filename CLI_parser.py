@@ -56,5 +56,5 @@ parser.add_argument("--checkpoint",
 parser.add_argument("--augmentation", "-a",
                     help="Float within [0, 1], training samples percentage"
                     "to augment",
-                    default=.5,
+                    default=.9,
                     type=float)

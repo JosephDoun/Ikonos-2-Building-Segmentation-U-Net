@@ -183,11 +183,19 @@ class Buildings(Dataset):
             'brightness': (.5, 1.5),
             'contrast': (.5, 1.5),
             'saturation': (.5, 1.5),
-            'hue': (-.01, .01)
+            'hue': (-.01, .01),
+            'affine': (
+                (-180, 180),
+                (0, 0),
+                (0.3, 3),
+                (-60, 60, -60, 60),
+                (4, 512, 512)
+                )
         }
         self.transforms = {
                 "rotate": transforms.RandomRotation(self._p['rotation']),
-                "color": transforms.ColorJitter()
+                "color": transforms.ColorJitter(),
+                "affine": transforms.RandomAffine(10)
             }
         self.color_functions = [
             F.adjust_brightness,
@@ -248,11 +256,11 @@ class Buildings(Dataset):
         img[[1, 2]] = img[[1, 2]] / 2
         return img
             
-    def _random_rotation_(self, img: List[Tensor], R):
+    def _random_affine_trans_(self, img: List[Tensor], R):
         if self.validation or R < (1-self.aug_split):
             return img[0], img[1]
-        p = self.transforms['rotate'].get_params(self._p['rotation'])
-        img[0], img[1] = F.rotate(img[0], p), F.rotate(img[1], p)
+        p = self.transforms['affine'].get_params(*self._p['affine'])
+        img[0], img[1] = F.affine(img[0], *p), F.affine(img[1], *p)
         return img[0], img[1]
         
     def __len__(self):
@@ -302,7 +310,7 @@ class Buildings(Dataset):
                                            self._p['saturation'],
                                            self._p['hue'],
                                            R=R)
-        image, label = self._random_rotation_([image, label.unsqueeze(0)],
+        image, label = self._random_affine_trans_([image, label.unsqueeze(0)],
                                               R)
         return image, label.to(torch.long).squeeze(0)
 
