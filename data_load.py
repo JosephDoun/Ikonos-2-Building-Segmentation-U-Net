@@ -37,7 +37,7 @@ def to_tiles(array, tile_size=512):
         array = np.moveaxis(array, -1, 1) / 2048
 
     elif array.ndim == 2:
-        
+
         array = np.pad(array, ((0, tile_size - array.shape[0] % tile_size),
                                (0, tile_size - array.shape[1] % tile_size)),
                        constant_values=0)
@@ -91,14 +91,14 @@ def make_training_hdf5(tile_size=512):
 
             X_train = X_tiles[idx[val_samples:]]
             Y_train = Y_tiles[idx[val_samples:]]
-            
+
             if val_samples:
                 X_valid = X_tiles[idx[:val_samples]]
                 Y_valid = Y_tiles[idx[:val_samples]]
             else:
                 X_valid = 0
                 Y_valid = 0
-                
+
             training_x.require_dataset(x_name,
                                        shape=X_train.shape,
                                        compression='gzip',
@@ -143,11 +143,11 @@ def make_training_hdf5(tile_size=512):
                                                      tile_size),
                                              dtype='i1',
                                              data=Y_valid)
-                
-                
+
+
 class Buildings(Dataset):
-    def __init__(self, validation: bool=False,
-                 aug_split=.5):
+    def __init__(self, validation: bool = False,
+                 aug_split=.9):
         self.aug_split = aug_split
         self.validation = validation
         self.file = h5py.File('Training/training_data.hdf5')
@@ -185,84 +185,82 @@ class Buildings(Dataset):
             'saturation': (.5, 1.5),
             'hue': (-.01, .01),
             'affine': (
-                (-180, 180),
+                (0, 180),
                 (0, 0),
                 (0.3, 3),
-                (-60, 60, -60, 60),
+                (-45, 45, -45, 45),
                 (4, 512, 512)
-                )
+            )
         }
         self.transforms = {
-                "rotate": transforms.RandomRotation(self._p['rotation']),
-                "color": transforms.ColorJitter(),
-                "affine": transforms.RandomAffine(10)
-            }
+            "rotate": transforms.RandomRotation(self._p['rotation']),
+            "color": transforms.ColorJitter(),
+            "affine": transforms.RandomAffine(10)
+        }
         self.color_functions = [
             F.adjust_brightness,
             F.adjust_contrast,
             F.adjust_saturation,
             F.adjust_hue
         ]
-    
-    # @staticmethod
-    # def _adjust_contrast_(img: Tensor, factor: float):
-    #     """
-    #         Custom contrast adjustment method supporting
-    #         more than 3 channels, based on torchvision.transforms.F
-    #         _blend() implementation.
-            
-    #         Added multiplication by (img > 0) which keeps nodata
-    #         values unaffected.
-    #     """
-    #     mean = img.mean((-3, -2, -1), keepdim=True)
-    #     return factor * img + (1 - factor) * mean * (img > 0)
-    
-    # @staticmethod
-    # def _adjust_brightness_(img: Tensor, factor: float):
-    #     return img*factor
-    
-    def _random_color_jitter_(self, img: Tensor, *args: List[float], **kwargs):
+
+    def _adjust_contrast_(self, img: Tensor, factor: float, R: float):
         """
-            img: 4 dimensional Tensor of 4 channels
-            args: ColorJitter min-maxes
-            
-            ColorJitter for first 3 channels, last 3 channels
-            and average results. Apply operations sequentially
-            the in right order.
-            
-            p: Returns (0: Tensor[int]: Sequence of operations,
-                        1: float: factor for brightness rescaling,
-                        2: float: factor for contrast rescaling,
-                        3: float: factor for saturation rescaling,
-                        4: float: factor for hue shift)
+            torchvision.transforms.functional_Tensor._blend()
+            modified for multiple channels 
         """
-        if self.validation or kwargs['R'] < (1-self.aug_split):
+        if self.validation or R < (1 - self.aug_split):
             return img
-        
-        p = self.transforms['color'].get_params(*args)
-        assert img.dim() == 3, "Tensor is not 3 dimensional"
-        # Break to 2 three-channel tensors
-        # To be elligible for pytorch's functions
-        img1 = img[:3]
-        img2 = img[1:]
-        for f_idx in p[0]:
-            # p[1:][f_idx]: corresponding parameters for function f.
-            img1 = self.color_functions[f_idx](img[:3, ...], p[1:][f_idx])
-            img2 = self.color_functions[f_idx](img[1:, ...], p[1:][f_idx])
-        img1 = torch.cat([img1, torch.zeros(1, img.size(-2), img.size(-1))], 0)
-        img2 = torch.cat([torch.zeros(1, img.size(-2), img.size(-1)), img2], 0)
-        # Rejoin and average overlap
-        img = img1 + img2
-        img[[1, 2]] = img[[1, 2]] / 2
-        return img
-            
+        mean = img.mean((-3, -2, -1), keepdim=True)
+        return (factor * img + (1 - factor) * mean).clamp(0, 1)
+
+    def _adjust_brightness_(self, img: Tensor, factor: float, R: float):
+        if self.validation or R < (1 - self.aug_split):
+            return img
+        return (img*factor).clamp(0, 1)
+
+    # def _random_color_jitter_(self, img: Tensor, *args: List[float], **kwargs):
+    #     """
+    #         img: 4 dimensional Tensor of 4 channels
+    #         args: ColorJitter min-maxes
+
+    #         ColorJitter for first 3 channels, last 3 channels
+    #         and average results. Apply operations sequentially
+    #         and in right order.
+
+    #         p: Returns (0: Tensor[int]: Order of operations,
+    #                     1: float: factor for brightness rescaling,
+    #                     2: float: factor for contrast rescaling,
+    #                     3: float: factor for saturation rescaling,
+    #                     4: float: factor for hue shift)
+    #     """
+    #     if self.validation or kwargs['R'] < (1-self.aug_split):
+    #         return img
+
+    #     p = self.transforms['color'].get_params(*args)
+    #     assert img.dim() == 3, "Tensor is not 3 dimensional"
+    #     # Break to 2 three-channel tensors
+    #     # To be elligible for pytorch's transform functions
+    #     img1 = img[:3]
+    #     img2 = img[1:]
+    #     for f_idx in p[0]:
+    #         # p[1:][f_idx]: corresponding parameters for function f.
+    #         img1 = self.color_functions[f_idx](img[:3, ...], p[1:][f_idx])
+    #         img2 = self.color_functions[f_idx](img[1:, ...], p[1:][f_idx])
+    #     img1 = torch.cat([img1, torch.zeros(1, img.size(-2), img.size(-1))], 0)
+    #     img2 = torch.cat([torch.zeros(1, img.size(-2), img.size(-1)), img2], 0)
+    #     # Rejoin and average overlap
+    #     img = img1 + img2
+    #     img[[1, 2]] = img[[1, 2]] / 2
+    #     return img
+
     def _random_affine_trans_(self, img: List[Tensor], R):
         if self.validation or R < (1-self.aug_split):
             return img[0], img[1]
         p = self.transforms['affine'].get_params(*self._p['affine'])
         img[0], img[1] = F.affine(img[0], *p), F.affine(img[1], *p)
         return img[0], img[1]
-        
+
     def __len__(self):
         return (sum(self._train_lengths) if not self.validation
                 else sum(self._validation_lengths))
@@ -273,10 +271,10 @@ class Buildings(Dataset):
             and figure out which Dataset it falls in, by mapping
             the cum_len list with min(index, cum_len). The Dataset
             index will then be the first occurence of given <index>.
-            
+
             To get the item's index in the current Dataset, get the
             modulo of the previous Dataset and subtract 1.
-            
+
             grp_idx: Dataset index in self.train_paths
                      If it is the first Dataset, simply
                      return <index>.
@@ -284,7 +282,7 @@ class Buildings(Dataset):
         R = np.random.random()
         if not self.validation:
             grp_idx = list(map(lambda x: min(x, index),
-                           self._cum_train_len)).index(index)
+                               self._cum_train_len)).index(index)
             path = self.train_paths[grp_idx]
             # Figure out index within Dataset.
             # Get the modulo of previous elements
@@ -297,21 +295,23 @@ class Buildings(Dataset):
                    if grp_idx else index)
         elif self.validation:
             grp_idx = list(map(lambda x: min(x, index),
-                           self._cum_validation_len)).index(index)
+                               self._cum_validation_len)).index(index)
             path = self.validation_paths[grp_idx]
             idx = (index % self._cum_validation_len[grp_idx-1] - 1
                    if grp_idx else index)
-                   
+
         image, label = (torch.from_numpy(self.file[path[0]][idx]),
                         torch.from_numpy(self.file[path[1]][idx]))
-        image = self._random_color_jitter_(image,
-                                           self._p['brightness'],
-                                           self._p['contrast'],
-                                           self._p['saturation'],
-                                           self._p['hue'],
-                                           R=R)
+        # image = self._random_color_jitter_(image,
+        #                                    self._p['brightness'],
+        #                                    self._p['contrast'],
+        #                                    self._p['saturation'],
+        #                                    self._p['hue'],
+        #                                    R=R)
+        image = self._adjust_brightness_(image, torch.rand(1)*2, R=R)
+        image = self._adjust_contrast_(image, torch.rand(1)*2, R=R)
         image, label = self._random_affine_trans_([image, label.unsqueeze(0)],
-                                              R)
+                                                  R)
         return image, label.to(torch.long).squeeze(0)
 
     def _get_group_(self, index):
@@ -322,6 +322,7 @@ class Buildings(Dataset):
                if grp_idx else index)
         return path, idx
 
+
 def plot_samples(samples: List[Tuple[Tensor]]):
     # TODO make this better.
     fig, axes = plt.subplots(min(len(samples), 4), 2)
@@ -331,7 +332,7 @@ def plot_samples(samples: List[Tuple[Tensor]]):
         ax_row[0].imshow(
             np.moveaxis(
                 sample[0], 0, -1
-                )[:, :, [2, 1, 0]])
+            )[:, :, [2, 1, 0]])
         ax_row[1].imshow(sample[1])
         ax_row[0].set_axis_off()
         ax_row[1].set_axis_off()
