@@ -185,10 +185,10 @@ class Buildings(Dataset):
             'saturation': (.5, 1.5),
             'hue': (-.01, .01),
             'affine': (
-                (0, 180),
+                (-180, 180),
                 (0, 0),
-                (0.3, 3),
-                (-45, 45, -45, 45),
+                (0.5, 2.5),
+                (-25, 25, -25, 25),
                 (4, 512, 512)
             )
         }
@@ -217,7 +217,7 @@ class Buildings(Dataset):
     def _adjust_brightness_(self, img: Tensor, factor: float, R: float):
         if self.validation or R < (1 - self.aug_split):
             return img
-        return (img*factor).clamp(0, 1)
+        return ((img + torch.randn_like(img)*0.005)*factor).clamp(0, 1)
 
     # def _random_color_jitter_(self, img: Tensor, *args: List[float], **kwargs):
     #     """
@@ -279,7 +279,6 @@ class Buildings(Dataset):
                      If it is the first Dataset, simply
                      return <index>.
         """
-        R = np.random.random()
         if not self.validation:
             grp_idx = list(map(lambda x: min(x, index),
                                self._cum_train_len)).index(index)
@@ -308,10 +307,12 @@ class Buildings(Dataset):
         #                                    self._p['saturation'],
         #                                    self._p['hue'],
         #                                    R=R)
-        image = self._adjust_brightness_(image, torch.rand(1)*2, R=R)
-        image = self._adjust_contrast_(image, torch.rand(1)*2, R=R)
+        image = self._adjust_brightness_(image, torch.rand(1)*1.5+0.5,
+                                         R=torch.rand(1))
+        image = self._adjust_contrast_(image, torch.rand(1)*1.5+0.5,
+                                       R=torch.rand(1))
         image, label = self._random_affine_trans_([image, label.unsqueeze(0)],
-                                                  R)
+                                                  R=torch.rand(1))
         return image, label.to(torch.long).squeeze(0)
 
     def _get_group_(self, index):

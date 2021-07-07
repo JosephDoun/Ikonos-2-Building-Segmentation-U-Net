@@ -57,7 +57,6 @@ class Training:
             self.fig, self.axes = plt.subplots(2, 3)
             for ax in self.axes.flat:
                 ax.set_axis_off()
-                ax.get_xaxis().set_visible(False)
                 ax.get_yaxis().set_visible(False)
         self.__init_scheduler__()
 
@@ -86,8 +85,8 @@ class Training:
                                  % epoch)
                 self.__monitor_layers__(epoch)
                 # self.__adjust_learning_rates__(layer_abs_means)
-            # Feed validation loss to the scheduler
-            self.scheduler.step(validation_metrics[-1].mean())
+            # Feed loss to scheduler
+            self.scheduler.step(training_metrics[-1].mean())
 
     def __train_epoch__(self, epoch, training_loader):
         self.model.train()
