@@ -21,7 +21,7 @@ import torch
 logging.basicConfig(
     format='%(asctime)s %(levelname)s:%(name)s: %(message)s',
     level=logging.DEBUG,
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%b %d %H:%M:%S'
 )
 
 log = logging.getLogger(__name__)
