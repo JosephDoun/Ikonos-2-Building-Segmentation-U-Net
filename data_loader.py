@@ -17,7 +17,7 @@ import logging
 logging.basicConfig(
     format='%(asctime)s %(levelname)s:%(name)s: %(message)s',
     level=logging.DEBUG,
-    datefmt='%b %d %H:%M:%S'
+    datefmt='%H:%M:%S %b %d'
 )
 
 log = logging.getLogger(__name__)
@@ -371,7 +371,7 @@ class Buildings(Dataset):
         if self.validation:
             length = self.X_val.len()
         else:
-            length = self.X_train_pos.len() + self.X_train_neg.len()
+            length = 2*max(self.X_train_pos.len(), self.X_train_neg.len())
         return length
 
     def __getitem__(self, index):
@@ -397,7 +397,7 @@ class Buildings(Dataset):
             elif index % 2:
                 features = self.X_train_neg
                 labels = self.Y_train_neg
-                idx = torch.randint(features.len(), (1,))
+                idx = (index - 1) // 2
         elif self.validation:
             idx = index
             features = self.X_val
