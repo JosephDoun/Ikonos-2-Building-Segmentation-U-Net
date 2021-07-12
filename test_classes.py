@@ -3,8 +3,8 @@ import random
 import torch
 from torch.tensor import Tensor
 from torch.utils.data import DataLoader
-with pytest.warns(DeprecationWarning):
-    from data_load import Buildings
+# with pytest.warns(DeprecationWarning):
+from data_loader import Buildings
 from model_architecture import BuildingsModel, DownSamplingBlock, UpSamplingBlock
 from model_training import Training
 

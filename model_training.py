@@ -5,16 +5,15 @@ import re
 import sys
 import os
 from typing import List, Tuple
-from cffi import model
 import numpy as np
 import matplotlib.pyplot as plt
 from CLI_parser import parser
 
-from torch.tensor import Tensor
+from torch import Tensor
 
 from model_architecture import BuildingsModel
 from torch.utils.data import DataLoader
-from data_load import Buildings
+from data_loader import Buildings
 from torch.nn import CrossEntropyLoss, parameter
 import torch.optim as optim
 import torch
@@ -46,7 +45,14 @@ class Training:
         self.optimizer = self.__init_optimizer__()
         self.training_loader, self.validation_loader = self.__init_loaders__()
         if self.argv.report:
-            self.report = {}
+            self.report = {
+                'total_training_loss': [],
+                'pos_training_loss': [],
+                'neg_training_loss': [],
+                'total_validation_loss': [],
+                'pos_validation_loss': [],
+                'neg_validation_loss': []
+            }
         if self.argv.monitor:
             self.t_monitor_idx = torch.randint(
                 self.training_batches, (1,)
@@ -54,10 +60,10 @@ class Training:
             self.v_monitor_idx = torch.randint(
                 self.validation_batches, (1,)
             )
-            self.fig, self.axes = plt.subplots(2, 3)
+            self.fig, self.axes = plt.subplots(2, 3, figsize=(15, 10))
             for ax in self.axes.flat:
                 ax.set_axis_off()
-                ax.get_yaxis().set_visible(False)
+                ax.get_xaxis().set_visible(False)
         self.__init_scheduler__()
 
     def start(self):
@@ -70,6 +76,9 @@ class Training:
                                                     self.training_loader)
             
             if epoch == 1 or not epoch % 100:
+                # Register hooks to capture validation
+                # Hooks are removed on execution to preserve memory.
+                # They are then reregistered every 100 epochs.
                 self.model._register_hooks_()
                 
             validation_metrics = self.__validate_epoch__(epoch,
@@ -86,7 +95,7 @@ class Training:
                 self.__monitor_layers__(epoch)
                 # self.__adjust_learning_rates__(layer_abs_means)
             # Feed loss to scheduler
-            self.scheduler.step(training_metrics[-1].mean())
+            # self.scheduler.step(training_metrics[-1].mean())
 
     def __train_epoch__(self, epoch, training_loader):
         self.model.train()
@@ -265,6 +274,13 @@ class Training:
                 _['ValidationF']
             )
         )
+        if self.argv.report:
+            self.report['total_training_loss'].append(
+                        _['TrainingL']
+                        )
+            self.report['total_validation_loss'].append(
+                _['ValidationL']
+                )
 
     def __monitor_layers__(self, epoch):
         
@@ -299,7 +315,7 @@ class Training:
             # )
         
         fig.tight_layout()
-        fig.savefig("Monitoring/Weights/%d.png" % epoch)
+        fig.savefig("Monitoring/Activations/%d.png" % epoch)
         self.model.activations = {}
 
     def __save_report__(self):
@@ -317,13 +333,18 @@ class Training:
         self.axes[parameters['mode'], 2].clear()
         self.axes[parameters['mode'], 2].imshow(p)
         self.axes[0, 0].set_title('X')
-        self.axes[0, 0].set_xlabel('Training', rotation='vertical')
+        self.axes[0, 0].set_ylabel('Training', rotation='vertical')
         self.axes[0, 1].set_title('Y')
         self.axes[0, 2].set_title('y_hat')
         self.axes[1, 0].set_title('X')
         self.axes[1, 0].set_ylabel('Validation', rotation='vertical')
         self.axes[1, 1].set_title('Y')
         self.axes[1, 2].set_title('y_hat')
+        for ax in self.axes.flatten():
+            ax.set_yticks([])
+            
+    def __del__(self):
+        pass
 
 
 if __name__ == "__main__":
