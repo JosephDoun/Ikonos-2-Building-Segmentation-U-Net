@@ -390,9 +390,10 @@ class Buildings(Dataset):
         """
         if not self.validation:
             if not index % 2:
-                idx = index // 2
                 features = self.X_train_pos
                 labels = self.Y_train_pos
+                idx = index // 2
+                idx %= len(features)
             elif index % 2:
                 features = self.X_train_neg
                 labels = self.Y_train_neg
