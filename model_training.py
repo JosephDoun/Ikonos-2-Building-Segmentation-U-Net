@@ -88,7 +88,7 @@ class Training:
                          Validation=validation_metrics)
             if not epoch % 100:
                 self.__checkpoint__(epoch)
-            if not epoch % 100 or epoch == 1:
+            if (not epoch % 100 or epoch == 1) and self.argv.monitor:
                 log.info("  -- Monitoring Active: Saving sample image --")
                 self.fig.savefig('Monitoring/Predictions/results_epoch_%d.png'
                                  % epoch)
@@ -102,7 +102,8 @@ class Training:
         metrics = torch.zeros(
             3,
             len(training_loader.dataset),
-            512, 512,
+            training_loader.dataset.X_train_pos.shape[-2],
+            training_loader.dataset.X_train_pos.shape[-1],
             device='cuda'
         )
         for i, (X, Y) in enumerate(training_loader):
@@ -129,7 +130,8 @@ class Training:
             metrics = torch.zeros(
                 3,
                 len(validation_loader.dataset),
-                512, 512,
+                validation_loader.dataset.X_val.shape[-2],
+                validation_loader.dataset.X_val.shape[-1],
                 device='cuda'
             )
             for i, (X, Y) in enumerate(validation_loader):
@@ -154,6 +156,14 @@ class Training:
         """
         loss = self.loss_fn(z, Y)
         return loss.mean(), loss
+    
+    def _compute_metrics_(self, i, a, Y, loss, metrics: Tensor):
+        _, predictions = a.max(-3)
+        idx = i * self.argv.batch_size
+        _ = slice(idx, idx+Y.size(0))
+        metrics[0, _] = predictions
+        metrics[1, _] = Y
+        metrics[2, _] = loss
 
     def __init_model__(self):
         model = BuildingsModel(4, self.argv.init_scale)
@@ -219,14 +229,6 @@ class Training:
         self.validation_batches = -(-len(validation_loader.dataset) //
                                     self.argv.batch_size)
         return training_loader, validation_loader
-
-    def _compute_metrics_(self, i, a, Y, loss, metrics: Tensor):
-        _, predictions = a.max(-3)
-        idx = i * self.argv.batch_size
-        _ = slice(idx, idx+Y.size(0))
-        metrics[0, _] = predictions
-        metrics[1, _] = Y
-        metrics[2, _] = loss
 
     def __checkpoint__(self, epoch):
         log.info("  -- Writing Checkpoint --")
