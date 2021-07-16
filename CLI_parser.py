@@ -22,7 +22,10 @@ parser.add_argument("--lr",
                     default=0.03,
                     type=float)
 parser.add_argument("--report", "-r",
-                    help="Produce final graph report",
+                    help="""
+                    Store losses on memory and produce a report graph -- Contrained by memory size
+                    Control with --report-rate to minimize logs accordingly
+                    """,
                     default=0,
                     const=1,
                     action='store_const')
@@ -46,9 +49,11 @@ parser.add_argument("--reload",
                     const=1,
                     action='store_const')
 parser.add_argument("--init-scale",
-                    help="The factor to multiply input channels with: "
-                         "in_channels*init_scale = out_channels"
-                         " - Controls overall U-net feature length",
+                    help="""
+                    The factor to initially multiply input channels with:
+                    in_channels*init_scale = out_channels
+                    -- Controls overall U-net feature length
+                    """,
                     default=8,
                     type=int)
 parser.add_argument("--checkpoint", "-c",
@@ -64,3 +69,14 @@ parser.add_argument("--balance-ratio", '-b',
                     type=int,
                     default=2,
                     help="Every n-th sample is negative, the rest are positive")
+parser.add_argument("--report-rate",
+                    type=int,
+                    default=0,
+                    help="""
+                    Epoch frequency to log losses for reporting
+                    Default: --epochs // 20
+                    """)
+parser.add_argument("--check-rate",
+                    type=int,
+                    default=10,
+                    help="Make checkpoint every n epochs -- monitor/checkpoint")
