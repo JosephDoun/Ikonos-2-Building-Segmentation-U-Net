@@ -1,7 +1,8 @@
 import argparse
 
 
-parser = argparse.ArgumentParser(description='Training')
+parser = argparse.ArgumentParser(description='Training',
+                                 prog='Model Training')
 
 parser.add_argument("--epochs",
                     help='Number of epochs for training',
@@ -26,12 +27,12 @@ parser.add_argument("--report", "-r",
                     const=1,
                     action='store_const')
 parser.add_argument("--debug", "-d",
-                    help="Print per batch losses",
+                    help="No use. Reserved.",
                     default=0,
                     const=1,
                     action='store_const')
 parser.add_argument("--monitor", "-m",
-                    help="Plot and monitor a random validation sample",
+                    help="Observe activations and predictions of a sample",
                     default=0,
                     const=1,
                     action='store_const')
@@ -46,10 +47,11 @@ parser.add_argument("--reload",
                     action='store_const')
 parser.add_argument("--init-scale",
                     help="The factor to multiply input channels with: "
-                         "in_channels*init_scale = out_channels",
+                         "in_channels*init_scale = out_channels"
+                         " - Controls overall U-net feature length",
                     default=8,
                     type=int)
-parser.add_argument("--checkpoint",
+parser.add_argument("--checkpoint", "-c",
                     help="Path to saved checkpoint",
                     default="Checkpoints/checkpoint.pt",
                     type=str)
@@ -58,3 +60,7 @@ parser.add_argument("--augmentation", "-a",
                     "to augment",
                     default=.66,
                     type=float)
+parser.add_argument("--balance-ratio", '-b',
+                    type=int,
+                    default=2,
+                    help="Every n-th sample is negative, the rest are positive")

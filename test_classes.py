@@ -1,6 +1,7 @@
 import pytest
 import random
 import torch
+import h5py
 from torch.tensor import Tensor
 from torch.utils.data import DataLoader
 # with pytest.warns(DeprecationWarning):
@@ -13,6 +14,13 @@ class TestDataset:
     training = Buildings()
     validation = Buildings(validation=True)
 
+    def test_hdf5_datasets(self):
+        with h5py.File("Training/training_dataset.hdf5", mode='r') as f:
+            for image in f['training/Y/pos']:
+                assert image.mean() > 0
+            for image in f['training/X/pos']:
+                assert image.mean() > 0
+    
     def test_training_dataset_instantiation(self):
         assert self.training
 
