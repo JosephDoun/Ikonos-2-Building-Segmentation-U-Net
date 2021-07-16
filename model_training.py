@@ -38,7 +38,8 @@ class Training:
         parser.description = type(self).__name__
         self.epoch = 1
         self.argv = parser.parse_args(argv)
-        self.report_rate = 5
+        self.report_rate = self.argv.report_rate or self.argv.epochs // 20
+        self.check_rate = self.argv.check_rate
         
         if self.argv.reload:
             self.checkpoint = self.__load_checkpoint__()
@@ -50,6 +51,12 @@ class Training:
         self.training_loader, self.validation_loader = self.__init_loaders__()
         
         if self.argv.report:
+            """
+            # TODO
+            Reporting should be eventually switched to
+            Tensorboard for efficiency and simplicity 
+            """
+            
             self.report = {
                 'total_training_loss': [],
                 'pos_training_loss': [],
@@ -60,7 +67,9 @@ class Training:
             }
             self.r_fig, self.r_axes = plt.subplots(1, 2, figsize=(15, 10))
             self.r_fig.suptitle(
-                f"Training Report - Balance: {self.argv.balance_ratio}"
+                f"""
+                Training Report - Balance: {self.argv.balance_ratio} 
+                {self.training_loader.dataset.augmentations}"""
                 )
             
         if self.argv.monitor:
@@ -92,23 +101,23 @@ class Training:
             training_metrics = self.__train_epoch__(epoch,
                                                     self.training_loader)
             
-            if epoch == 1 or not epoch % self.report_rate:
+            if epoch == 1 or not epoch % self.check_rate:
                 # Register hooks to capture validation
                 # Hooks are removed on execution to preserve memory.
-                # They are then reregistered every 100 epochs.
+                # Repeat at next checkpoint
                 self.model._register_hooks_()
                 
             validation_metrics = self.__validate_epoch__(epoch,
                                                          self.validation_loader)
             self.__log__(epoch,
-                         Training=training_metrics,
-                         Validation=validation_metrics)
+                         T=training_metrics,
+                         V=validation_metrics)
             
-            if not epoch % self.report_rate:
+            if not epoch % self.check_rate:
                 
                 self.__checkpoint__(epoch)
             
-            if (not epoch % self.report_rate or epoch == 1) and self.argv.monitor:
+            if (not epoch % self.check_rate or epoch == 1) and self.argv.monitor:
                 
                 log.info("  -- Monitoring Active: Saving sample image --")
                 self.pred_fig.savefig('Monitoring/Predictions/results_epoch_%d.png'
@@ -161,8 +170,10 @@ class Training:
                 z, a = self.model(X)
                 loss, _loss = self.__compute_loss__(z, Y)
                 self._compute_metrics_(i, a, Y, _loss, metrics)
+                
                 if all([self.argv.monitor and i == self.v_monitor_idx,
-                        epoch == 1 or not epoch % self.report_rate]):
+                        epoch == 1 or not epoch % self.check_rate]):
+                    
                     self.__monitor_sample__(epoch=epoch,
                                             X=X.cpu().detach().numpy(),
                                             Y=Y.cpu().detach().numpy(),
@@ -291,38 +302,44 @@ class Training:
             _[mode+'Lneg'] = m[2][m[1] == 0].mean()
 
         log.info(
-            "[ Epoch %4d of %4d :: %s Loss %2.5f - IoU: %2.5f ::"
-            " %s Loss %2.5f - IoU: %2.5f / F: %2.5f ]"
+            "[ Epoch %4d of %4d :: %s L %2.3f Lpos %2.3f Lneg %2.3f - IoU: %2.3f ::"
+            " %s L %2.3f Lpos %2.3f Lneg %2.3f - IoU: %2.3f / F: %2.3f ]"
             % (
                 epoch,
                 self.argv.epochs,
-                'Training',
-                _['TrainingL'],
-                _['TrainingIOU'],
-                'Validation',
-                _['ValidationL'],
-                _['ValidationIOU'],
-                _['ValidationF']
+                'T',
+                _['TL'],
+                _['TLpos'],
+                _['TLneg'],
+                _['TIOU'],
+                'V',
+                _['VL'],
+                _['VLpos'],
+                _['VLneg'],
+                _['VIOU'],
+                _['VF']
             )
         )
-        if self.argv.report:
+        
+        if self.argv.report and (not epoch % self.report_rate
+                                 or epoch == 1):
             self.report['total_training_loss'].append(
-                        _['TrainingL']
+                        _['TL']
                         )
             self.report['total_validation_loss'].append(
-                _['ValidationL']
+                _['VL']
                 )
             self.report['pos_training_loss'].append(
-                _['TrainingLpos']
+                _['TLpos']
             )
             self.report['neg_training_loss'].append(
-                _['TrainingLneg']
+                _['TLneg']
             )
             self.report['pos_validation_loss'].append(
-                _['ValidationLpos']
+                _['VLpos']
             )
             self.report['neg_validation_loss'].append(
-                _['ValidationLneg']
+                _['VLneg']
             )
 
     def __monitor_layers__(self, epoch):
