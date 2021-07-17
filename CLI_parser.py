@@ -13,24 +13,19 @@ parser.add_argument("--batch-size",
                     default=1,
                     type=int)
 parser.add_argument("--num-workers",
-                    help="Number of background proceses"
+                    help="Number of background processes "
                             "for data loading",
                     default=4,
                     type=int)
 parser.add_argument("--lr",
                     help='Learning rate',
-                    default=0.03,
+                    default=0.001,
                     type=float)
 parser.add_argument("--report", "-r",
                     help="""
-                    Store losses on memory and produce a report graph -- Contrained by memory size
-                    Control with --report-rate to minimize logs accordingly
+                    Store losses on memory and produce a report graph -- Contrained by memory size.
+                    Control with REPORT_RATE to minimize logs accordingly
                     """,
-                    default=0,
-                    const=1,
-                    action='store_const')
-parser.add_argument("--debug", "-d",
-                    help="No use. Reserved.",
                     default=0,
                     const=1,
                     action='store_const')
@@ -61,9 +56,9 @@ parser.add_argument("--checkpoint", "-c",
                     default="Checkpoints/checkpoint.pt",
                     type=str)
 parser.add_argument("--augmentation", "-a",
-                    help="Float within [0, 1], training samples percentage"
-                    "to augment",
-                    default=.66,
+                    help="Float within [0, 1], training samples percentage "
+                    "to augment. NOT USED to be removed.",
+                    default=1.0,
                     type=float)
 parser.add_argument("--balance-ratio", '-b',
                     type=int,
@@ -73,10 +68,13 @@ parser.add_argument("--report-rate",
                     type=int,
                     default=0,
                     help="""
-                    Epoch frequency to log losses for reporting
-                    Default: --epochs // 20
+                    Epoch frequency to log losses for reporting.
+                    Default: EPOCHS // 10
                     """)
 parser.add_argument("--check-rate",
                     type=int,
-                    default=10,
-                    help="Make checkpoint every n epochs -- monitor/checkpoint")
+                    default=0,
+                    help="""
+                    Make checkpoint every n epochs - For Monitor/Checkpoint.
+                    Default: EPOCHS // 10
+                    """)
