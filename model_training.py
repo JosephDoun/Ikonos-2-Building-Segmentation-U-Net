@@ -423,11 +423,11 @@ class Training:
         self.r_axes[0].legend()
         self.r_axes[1].plot(self.report['pos_training_loss'],
                             'k--', label='pos_train_loss')
+        self.r_axes[1].plot(self.report['pos_validation_loss'],
+                            'k-', label='pos_val_loss')
         self.r_axes[1].plot(self.report['neg_training_loss'],
                             label='neg_train_loss', color=(.5, .5, .5),
                             ls='--')
-        self.r_axes[1].plot(self.report['pos_validation_loss'],
-                            'k-', label='pos_val_loss')
         self.r_axes[1].plot(self.report['neg_validation_loss'],
                             label='neg_val_loss', color=(.5, .5, .5))
         self.r_axes[1].legend()
