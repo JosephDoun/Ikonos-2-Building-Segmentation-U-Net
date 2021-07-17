@@ -3,9 +3,7 @@
 from typing import Iterable, List, Tuple
 import h5py
 import numpy as np
-import matplotlib.pyplot as plt
-from numpy.core.fromnumeric import size
-from numpy.lib.type_check import imag
+from numpy.lib.twodim_base import eye
 from osgeo import gdal_array, gdal
 from torch.utils.data import Dataset
 from glob import glob
@@ -27,6 +25,7 @@ logging.basicConfig(
 
 log = logging.getLogger(argv[0])
 log.setLevel(logging.DEBUG)
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Training Data Creation',
@@ -329,15 +328,15 @@ def make_training_hdf5(train_tiles=512, val_tiles=512):
 
 
 class Buildings(Dataset):
-    
+
     def log_augmentation(f):
-        def wrapper(self, *args):
+        def wrapper(self, *args, **kwargs):
             if f.__name__ not in self.augmentations.keys():
-                self.augmentations[f.__name__] = args[1:]
-            r = f(self, *args)
+                self.augmentations[f.__name__] = args[1:] or kwargs
+            r = f(self, *args, **kwargs)
             return r
         return wrapper
-    
+
     def __init__(self, validation: bool = False,
                  aug_split=.66, ratio=10):
 
@@ -381,13 +380,13 @@ class Buildings(Dataset):
     def _affine_(self, img: List[Tensor]):
         if self.validation:
             return img[0], img[1]
-        
+
         degrees = torch.rand(1).item() * 360 - 180
         translations = [int(img[0].shape[-2] * .15 * torch.rand(1)),
                         int(img[0].shape[-1] * .15 * torch.rand(1))]
-        scale = torch.rand(1) * 0.1 + 1
-        shear = torch.rand(1).item() * 120 - 60
-        
+        scale = torch.rand(1) * 0.3 + .85
+        shear = 0  # torch.rand(1).item() * 120 - 60
+
         img[0] = F.affine(img[0], angle=degrees,
                           translate=translations,
                           scale=scale,
@@ -415,7 +414,7 @@ class Buildings(Dataset):
         if self.validation:
             return img
         img = img + torch.randn_like(img) * factor
-        return img.clamp(0, 1)
+        return img # .clamp(0, 1)
 
     @log_augmentation
     def _elastic_deformation_(self, img: List[Tensor],
@@ -439,24 +438,23 @@ class Buildings(Dataset):
             2 * torch.rand(1, *img[1].shape) - 1, k, sigma=sigma
         ) * alpha
 
-        idxy = torch.arange(img[1].shape[-2])
-        idxx = torch.arange(img[1].shape[-1])
+        displacements = torch.cat([(dy).unsqueeze(-1),
+                                   (dx).unsqueeze(-1)], -1)
 
-        y, x = torch.meshgrid(idxy, idxx)
-
-        grid = torch.cat([(y+dy).unsqueeze(-1),
-                          (x+dx).unsqueeze(-1)], -1).squeeze(0)
+        eye_grid = nn_F.affine_grid(torch.Tensor([[[1, 0, 0],
+                                                   [0, 1, 0]]]),
+                                    img[0].unsqueeze(0).shape)
+        eye_grid += displacements
 
         img[0] = nn_F.grid_sample(img[0].unsqueeze(0),
-                                  grid/(img[0].size(-1) - 1),
+                                  eye_grid,
                                   align_corners=True,
                                   mode='bilinear').squeeze(0).clamp(0, 1)
 
-        img[1] = nn_F.grid_sample(img[1].float().reshape(1, *img[1].shape),
-                                  grid/(img[1].size(-1) - 1),
+        img[1] = nn_F.grid_sample(img[1].float().reshape(1, 1, *img[1].shape),
+                                  eye_grid,
                                   align_corners=True,
                                   mode='nearest').reshape(img[1].shape)
-        img[1][img[1] > 0] = 1
         return img
 
     @log_augmentation
@@ -514,25 +512,25 @@ class Buildings(Dataset):
                         torch.from_numpy(labels[idx]))
 
         # image, label = self._random_crop_([image, label], (64, 64))
-        image, label = self._affine_([image, label.unsqueeze(0)])
         # image, label = self._random_flip_([image, label])
-        # image, label = self._elastic_deformation_([image, label],
-        #                                           k=21,
-        #                                           sigma=10,
-        #                                           alpha=30)
+        image, label = self._elastic_deformation_([image, label],
+                                                  k=5,
+                                                  sigma=10,
+                                                  alpha=.2)
+        # image, label = self._affine_([image, label.unsqueeze(0)])
         image = self._noise_(image, 0.01)
-        image = self._adjust_brightness_(image, torch.rand(1)*1. + .5)
-        image = self._adjust_contrast_(image, torch.rand(1)*1. + .5)
+        image = self._adjust_brightness_(image, torch.rand(1)*.5 + .75)
+        image = self._adjust_contrast_(image, torch.rand(1)*5 + .75)
         return image, label.to(torch.long).squeeze(0)
-    
+
     def _augment_(self, img: List[Tensor]):
         """
         Collect and apply defined augmentations here
-        
+
         :param img: List of tensors in [feature, label] format
         """
         pass
-    
+
 
 if not os.path.exists("Training/training_data.hdf5"):
     os.makedirs("Training", exist_ok=True)
