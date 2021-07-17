@@ -357,25 +357,25 @@ class Buildings(Dataset):
         self.augmentations = {}
 
     @log_augmentation
-    def _adjust_contrast_(self, img: Tensor, factor: float, R: float):
+    def _adjust_contrast_(self, img: Tensor, factor: float):
         """
         Contrast adjustment function based on
         torchvision.transforms.functional_Tensor._blend()
         modified for multiple channels 
         """
-        if self.validation or R < (1 - self.aug_split):
+        if self.validation:
             return img
         mean = img.mean((-3, -2, -1), keepdim=True)
         return (factor * img + (1 - factor) * mean)  # .clamp(0, 1)
 
     @log_augmentation
-    def _adjust_brightness_(self, img: Tensor, factor: float, R: float):
+    def _adjust_brightness_(self, img: Tensor, factor: float):
         """
         Brightness adjustment
         """
-        if self.validation or R < (1 - self.aug_split):
+        if self.validation:
             return img
-        return (img*factor)  # .clamp(0, 1)
+        return img*factor  # .clamp(0, 1)
 
     @log_augmentation
     def _affine_(self, img: List[Tensor]):
@@ -514,10 +514,6 @@ class Buildings(Dataset):
                         torch.from_numpy(labels[idx]))
 
         # image, label = self._random_crop_([image, label], (64, 64))
-        # image = self._adjust_brightness_(image, torch.rand(1)*.2 + 0.9,
-        #                                  R=R_color)
-        # image = self._adjust_contrast_(image, torch.rand(1)*.4 + 0.8,
-        #                                R=R_color)
         image, label = self._affine_([image, label.unsqueeze(0)])
         # image, label = self._random_flip_([image, label])
         # image, label = self._elastic_deformation_([image, label],
@@ -525,7 +521,17 @@ class Buildings(Dataset):
         #                                           sigma=10,
         #                                           alpha=30)
         image = self._noise_(image, 0.01)
+        image = self._adjust_brightness_(image, torch.rand(1)*1. + .5)
+        image = self._adjust_contrast_(image, torch.rand(1)*1. + .5)
         return image, label.to(torch.long).squeeze(0)
+    
+    def _augment_(self, img: List[Tensor]):
+        """
+        Collect and apply defined augmentations here
+        
+        :param img: List of tensors in [feature, label] format
+        """
+        pass
     
 
 if not os.path.exists("Training/training_data.hdf5"):

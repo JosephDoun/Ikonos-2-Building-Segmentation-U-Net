@@ -22,7 +22,7 @@ import torch
 logging.basicConfig(
     format='%(asctime)s %(levelname)s:%(name)s: %(message)s',
     level=logging.DEBUG,
-    datefmt='%H:%M:%S %b %d'
+    datefmt='%H:%M:%S %b%d'
 )
 
 log = logging.getLogger(__name__)
@@ -32,65 +32,72 @@ mpl.setLevel(logging.WARNING)
 
 run_time = datetime.now().strftime("%Y_%b%d_%H%M")
 
+
 class Training:
     def __init__(self, argv=sys.argv[1:]) -> None:
         log.name = type(self).__name__
         parser.description = type(self).__name__
         self.epoch = 1
         self.argv = parser.parse_args(argv)
-        self.report_rate = self.argv.report_rate or self.argv.epochs // 20
-        self.check_rate = self.argv.check_rate
-        
+        self.report_rate = self.argv.report_rate or self.argv.epochs // 10
+        self.check_rate = self.argv.check_rate or self.argv.epochs // 10
+
         if self.argv.reload:
             self.checkpoint = self.__load_checkpoint__()
             self.epoch = self.checkpoint['epoch']
-            
+
         self.model = self.__init_model__()
         self.loss_fn = CrossEntropyLoss(reduction='none')
         self.optimizer = self.__init_optimizer__()
         self.training_loader, self.validation_loader = self.__init_loaders__()
-        
+
         if self.argv.report:
             """
             # TODO
             Reporting should be eventually switched to
             Tensorboard for efficiency and simplicity 
             """
-            
-            self.report = {
-                'total_training_loss': [],
-                'pos_training_loss': [],
-                'neg_training_loss': [],
-                'total_validation_loss': [],
-                'pos_validation_loss': [],
-                'neg_validation_loss': []
-            }
-            self.r_fig, self.r_axes = plt.subplots(1, 2, figsize=(15, 10))
-            self.r_fig.suptitle(
-                f"""
-                Training Report - Balance: {self.argv.balance_ratio} 
-                {self.training_loader.dataset.augmentations}"""
-                )
-            
+            self._init_report_figure_()
+
         if self.argv.monitor:
-            
-            self.t_monitor_idx = torch.randint(
-                self.training_batches, (1,)
-            )
-            self.v_monitor_idx = torch.randint(
-                self.validation_batches, (1,)
-            )
-            self.pred_fig, self.pred_axes = plt.subplots(2, 3, figsize=(15, 10))
-            self.act_fig, self.act_axes = plt.subplots(3, 6, figsize=(15, 10))
-            self.act_axes = self.act_axes.flatten()
-            
-            for ax in self.pred_axes.flat:
-                ax.set_axis_off()
-                ax.get_xaxis().set_visible(False)
-                
-            
-                
+            self._init_monitor_figures()
+
         self.__init_scheduler__()
+
+    def _init_report_figure_(self):
+        self.report = {
+            'total_training_loss': [],
+            'pos_training_loss': [],
+            'neg_training_loss': [],
+            'total_validation_loss': [],
+            'pos_validation_loss': [],
+            'neg_validation_loss': []
+        }
+        self.r_fig, self.r_axes = plt.subplots(1, 2, figsize=(15, 10))
+        self.r_fig.suptitle(
+            f"""
+            Training Report - Balance: {self.argv.balance_ratio} 
+            {self.training_loader.dataset.augmentations}"""
+        )
+        for ax in self.r_axes:
+            ax.set_ylabel("Cross Entropy Loss")
+            ax.set_xlabel("Relevant Epochs")
+            ax.set_facecolor((.9, .9, .9))
+
+    def _init_monitor_figures(self):
+        self.t_monitor_idx = torch.randint(
+            self.training_batches, (1,)
+        )
+        self.v_monitor_idx = torch.randint(
+            self.validation_batches, (1,)
+        )
+        self.pred_fig, self.pred_axes = plt.subplots(2, 3, figsize=(15, 10))
+        self.act_fig, self.act_axes = plt.subplots(3, 6, figsize=(15, 10))
+        self.act_axes = self.act_axes.flatten()
+
+        for ax in self.pred_axes.flat:
+            ax.set_axis_off()
+            ax.get_xaxis().set_visible(False)
 
     def start(self):
         log.info(
@@ -100,28 +107,28 @@ class Training:
         for epoch in range(self.epoch, self.argv.epochs+1):
             training_metrics = self.__train_epoch__(epoch,
                                                     self.training_loader)
-            
+
             if epoch == 1 or not epoch % self.check_rate:
                 # Register hooks to capture validation
                 # Hooks are removed on execution to preserve memory.
                 # Repeat at next checkpoint
                 self.model._register_hooks_()
-                
+
             validation_metrics = self.__validate_epoch__(epoch,
                                                          self.validation_loader)
             self.__log__(epoch,
                          T=training_metrics,
                          V=validation_metrics)
-            
+
             if not epoch % self.check_rate:
-                
+
                 self.__checkpoint__(epoch)
-            
+
             if (not epoch % self.check_rate or epoch == 1) and self.argv.monitor:
-                
+
                 log.info("  -- Monitoring Active: Saving sample image --")
                 self.pred_fig.savefig('Monitoring/Predictions/results_epoch_%d.png'
-                                 % epoch)
+                                      % epoch)
                 self.__monitor_layers__(epoch)
                 # self.__adjust_learning_rates__(layer_abs_means)
             # Feed loss to scheduler
@@ -170,10 +177,10 @@ class Training:
                 z, a = self.model(X)
                 loss, _loss = self.__compute_loss__(z, Y)
                 self._compute_metrics_(i, a, Y, _loss, metrics)
-                
+
                 if all([self.argv.monitor and i == self.v_monitor_idx,
                         epoch == 1 or not epoch % self.check_rate]):
-                    
+
                     self.__monitor_sample__(epoch=epoch,
                                             X=X.cpu().detach().numpy(),
                                             Y=Y.cpu().detach().numpy(),
@@ -188,7 +195,7 @@ class Training:
         """
         loss = self.loss_fn(z, Y)
         return loss.mean(), loss
-    
+
     def _compute_metrics_(self, i, a, Y, loss, metrics: Tensor):
         _, predictions = a.max(-3)
         idx = i * self.argv.batch_size
@@ -225,12 +232,11 @@ class Training:
             {'params': self.model.up_4.parameters()},
             {'params': [*self.model.z.parameters(),
                         *self.model.prob.parameters()]}
-            ],
-                         lr=self.argv.lr,
-                         weight_decay=self.argv.l2,
-                         betas=(.99, .99))
-        
-        
+        ],
+            lr=self.argv.lr,
+            weight_decay=self.argv.l2,
+            betas=(.99, .99))
+
         if self.argv.reload:
             opt.load_state_dict(self.checkpoint['optimizer_state'])
             for p in opt.param_groups:
@@ -264,6 +270,12 @@ class Training:
                                   self.argv.batch_size)
         self.validation_batches = -(-len(validation_loader.dataset) //
                                     self.argv.batch_size)
+
+        if self.report_rate:
+            # Index a sample to register active augmentations
+            # To use for report figure title
+            training_loader.dataset[0]
+
         return training_loader, validation_loader
 
     def __checkpoint__(self, epoch):
@@ -302,17 +314,17 @@ class Training:
             _[mode+'Lneg'] = m[2][m[1] == 0].mean()
 
         log.info(
-            "[ Epoch %4d of %4d :: %s L %2.3f Lpos %2.3f Lneg %2.3f - IoU: %2.3f ::"
-            " %s L %2.3f Lpos %2.3f Lneg %2.3f - IoU: %2.3f / F: %2.3f ]"
+            "[ E%4d /%4d :: %s L %2.3f Lpos %2.3f Lneg %2.3f - IoU %2.3f ::"
+            " %s L %2.3f Lpos %2.3f Lneg %2.3f - IoU %2.3f / F %2.3f ]"
             % (
                 epoch,
                 self.argv.epochs,
-                'T',
+                '(T)',
                 _['TL'],
                 _['TLpos'],
                 _['TLneg'],
                 _['TIOU'],
-                'V',
+                '(V)',
                 _['VL'],
                 _['VLpos'],
                 _['VLneg'],
@@ -320,15 +332,15 @@ class Training:
                 _['VF']
             )
         )
-        
+
         if self.argv.report and (not epoch % self.report_rate
                                  or epoch == 1):
             self.report['total_training_loss'].append(
-                        _['TL']
-                        )
+                _['TL']
+            )
             self.report['total_validation_loss'].append(
                 _['VL']
-                )
+            )
             self.report['pos_training_loss'].append(
                 _['TLpos']
             )
@@ -343,10 +355,10 @@ class Training:
             )
 
     def __monitor_layers__(self, epoch):
-        
+
         self.act_axes = self.act_axes.flatten()
         self.act_fig.suptitle("Epoch %d" % epoch)
-        
+
         for i, (name, activation) in enumerate(self.model.activations.items()):
             self.act_axes[i].set_title(name)
             hist = np.array(
@@ -356,14 +368,14 @@ class Training:
                         # Reshape the batch sample to features * values
                         # Get histogram for each feature
                         activation[0].reshape(activation[0].size(0), -1)
-                        )
                     )
                 )
-            
+            )
+
             # Normalize each row for full brightness
             hist = hist / np.expand_dims(hist.max(-1), 1)
             self.act_axes[i].imshow(hist, aspect='auto', cmap='Reds')
-            
+
             # bins = np.array(
             #     list(
             #         map(
@@ -372,12 +384,12 @@ class Training:
             #         )
             #     )
             # )
-        
+
         self.act_fig.tight_layout()
         self.act_fig.savefig("Monitoring/Activations/%d.png" % epoch)
-    
+
         self.model.activations = {}
-        
+
         for ax in self.act_axes:
             ax.clear()
 
@@ -402,25 +414,33 @@ class Training:
         self.pred_axes[1, 2].set_title('y_hat')
         for ax in self.pred_axes.flatten():
             ax.set_yticks([])
-            
+
     def _report_(self):
         self.r_axes[0].plot(self.report['total_training_loss'],
-                     label='total_training loss')
+                            'k--', label='total_training loss')
         self.r_axes[0].plot(self.report['total_validation_loss'],
-                     label='total_validation loss')
+                            'k-', label='total_validation loss')
         self.r_axes[0].legend()
-        self.r_axes[1].plot(self.report['pos_training_loss'], label='pos_train_loss')
-        self.r_axes[1].plot(self.report['neg_training_loss'], label='neg_train_loss')
-        self.r_axes[1].plot(self.report['pos_validation_loss'], label='pos_val_loss')
-        self.r_axes[1].plot(self.report['neg_validation_loss'], label='neg_val_loss')
+        self.r_axes[1].plot(self.report['pos_training_loss'],
+                            'k--', label='pos_train_loss')
+        self.r_axes[1].plot(self.report['neg_training_loss'],
+                            label='neg_train_loss', color=(.5, .5, .5),
+                            ls='--')
+        self.r_axes[1].plot(self.report['pos_validation_loss'],
+                            'k-', label='pos_val_loss')
+        self.r_axes[1].plot(self.report['neg_validation_loss'],
+                            label='neg_val_loss', color=(.5, .5, .5))
         self.r_axes[1].legend()
         os.makedirs("Reports", exist_ok=True)
         log.info(
-            "   -- Saving Report -- "
+            "  -- Reporting Active: Saving Report -- "
         )
-        self.r_fig.savefig(f"Reports/report_b{self.argv.balance_ratio}_{run_time}.png")
-        self.r_axes[0].clear()
-        self.r_axes[1].clear()
+        self.r_fig.savefig(
+            f"Reports/report_b{self.argv.balance_ratio}_{run_time}.png")
+
+        for ax in self.r_axes:
+            for line in ax.lines:
+                line.remove()
 
 
 if __name__ == "__main__":
