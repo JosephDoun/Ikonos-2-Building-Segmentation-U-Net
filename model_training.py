@@ -420,7 +420,6 @@ class Training:
                             'k--', label='total_training loss')
         self.r_axes[0].plot(self.report['total_validation_loss'],
                             'k-', label='total_validation loss')
-        self.r_axes[0].legend()
         self.r_axes[1].plot(self.report['pos_training_loss'],
                             'k--', label='pos_train_loss')
         self.r_axes[1].plot(self.report['pos_validation_loss'],
@@ -430,7 +429,10 @@ class Training:
                             ls='--')
         self.r_axes[1].plot(self.report['neg_validation_loss'],
                             label='neg_val_loss', color=(.5, .5, .5))
-        self.r_axes[1].legend()
+
+        for ax in self.r_axes:
+            ax.legend_ or ax.legend()
+            
         os.makedirs("Reports", exist_ok=True)
         log.info(
             "  -- Reporting Active: Saving Report -- "
