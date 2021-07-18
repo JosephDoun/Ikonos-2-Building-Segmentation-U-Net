@@ -43,7 +43,7 @@ parser.add_argument("--reload",
                     default=0,
                     const=1,
                     action='store_const')
-parser.add_argument("--init-scale",
+parser.add_argument("--init-scale", "-i",
                     help="""
                     The factor to initially multiply input channels with:
                     in_channels*init_scale = out_channels

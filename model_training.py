@@ -74,10 +74,15 @@ class Training:
             'neg_validation_loss': []
         }
         self.r_fig, self.r_axes = plt.subplots(1, 2, figsize=(15, 10))
+        
+        augs = self.training_loader.dataset.augmentations
+        
+        # TODO organize augmentations on title
         self.r_fig.suptitle(
             f"""
-            Training Report - Balance: {self.argv.balance_ratio} 
-            {self.training_loader.dataset.augmentations}"""
+        Training Report - Balance: {self.argv.balance_ratio} - Scale:{self.argv.init_scale}
+        {self.training_loader.dataset.augmentations
+        }"""
         )
         for ax in self.r_axes:
             ax.set_ylabel("Cross Entropy Loss")
@@ -213,6 +218,9 @@ class Training:
         return model
 
     def __init_optimizer__(self):
+        """
+        Isolating each block for more control
+        """
         opt = optim.Adam([
             {'params': self.model.down_1.parameters(),
              'weight_decay': 0.00000},
