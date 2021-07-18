@@ -356,28 +356,41 @@ class Buildings(Dataset):
         self.augmentations = {}
 
     @log_augmentation
-    def _adjust_contrast_(self, img: Tensor, factor: float):
+    def _adjust_contrast_(self, img: Tensor, r: float, m: float):
         """
         Contrast adjustment function based on
         torchvision.transforms.functional_Tensor._blend()
-        modified for multiple channels 
+        modified for multiple channels
+        
+        :param r: range of values
+        :param m: minimum value
+        :param f: adjustment factor
         """
         if self.validation:
             return img
+        factor = torch.rand(1) * r + m
         mean = img.mean((-3, -2, -1), keepdim=True)
         return (factor * img + (1 - factor) * mean)  # .clamp(0, 1)
 
     @log_augmentation
-    def _adjust_brightness_(self, img: Tensor, factor: float):
+    def _adjust_brightness_(self, img: Tensor, r: float, m: float):
         """
         Brightness adjustment
+        :param r: Range of values
+        :param m: Minimum value
+        :param f: Adjustment factor. Brightness increases for f > 1.
+                  Decreases for f < 1.
         """
         if self.validation:
             return img
+        factor = torch.rand(1) * r + m
         return img*factor  # .clamp(0, 1)
 
     @log_augmentation
-    def _affine_(self, img: List[Tensor]):
+    def _affine_(self, img: List[Tensor], sh: bool = False):
+        """
+        :param sh: Whether to use shear in the affine transformation
+        """
         if self.validation:
             return img[0], img[1]
 
@@ -385,7 +398,7 @@ class Buildings(Dataset):
         translations = [int(img[0].shape[-2] * .15 * torch.rand(1)),
                         int(img[0].shape[-1] * .15 * torch.rand(1))]
         scale = torch.rand(1) * 0.3 + .85
-        shear = 0  # torch.rand(1).item() * 120 - 60
+        shear = sh * (torch.rand(1).item() * 120 - 60)
 
         img[0] = F.affine(img[0], angle=degrees,
                           translate=translations,
@@ -410,10 +423,10 @@ class Buildings(Dataset):
         return img[0], img[1]
 
     @log_augmentation
-    def _noise_(self, img: Tensor, factor: float):
+    def _noise_(self, img: Tensor, f: float):
         if self.validation:
             return img
-        img = img + torch.randn_like(img) * factor
+        img = img + torch.randn_like(img) * f
         return img # .clamp(0, 1)
 
     @log_augmentation
@@ -428,33 +441,38 @@ class Buildings(Dataset):
         *Best Practices for Convolutional Neural Networks Appled to
         Visual Document Analysis*
         
+        Relevant repositories / Other implementations:
+        https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a
+        
         Implemented as to the recommendation of Ronneberger et al. 2015
         in the original U-Net paper.
+        
+        :param k: kernel size of gaussian filter for displacements
+        :param sigma: std deviation to use for gaussian distribution
+        :param alpha: displacement intensity
         """
-        dy = F.gaussian_blur(
-            2 * torch.rand(1, *img[1].shape) - 1, k, sigma=sigma
+        delta = F.gaussian_blur(
+            2 * torch.rand(1, 2, img[0].size(-2), img[0].size(-1)) - 1,
+            kernel_size=k,
+            sigma=sigma
         ) * alpha
-        dx = F.gaussian_blur(
-            2 * torch.rand(1, *img[1].shape) - 1, k, sigma=sigma
-        ) * alpha
-
-        displacements = torch.cat([(dy).unsqueeze(-1),
-                                   (dx).unsqueeze(-1)], -1)
-
+        
         eye_grid = nn_F.affine_grid(torch.Tensor([[[1, 0, 0],
                                                    [0, 1, 0]]]),
-                                    img[0].unsqueeze(0).shape)
-        eye_grid += displacements
+                                    img[0].unsqueeze(0).shape,
+                                    align_corners=True)
+        eye_grid += delta.moveaxis(1, -1)
 
         img[0] = nn_F.grid_sample(img[0].unsqueeze(0),
                                   eye_grid,
                                   align_corners=True,
-                                  mode='bilinear').squeeze(0).clamp(0, 1)
+                                  mode='bicubic').squeeze(0)
 
         img[1] = nn_F.grid_sample(img[1].float().reshape(1, 1, *img[1].shape),
                                   eye_grid,
                                   align_corners=True,
-                                  mode='nearest').reshape(img[1].shape)
+                                  mode='bicubic').reshape(img[1].shape)
+        img[1][img[1] > 0.5] = 1
         return img
 
     @log_augmentation
@@ -503,24 +521,19 @@ class Buildings(Dataset):
             features = self.X_val
             labels = self.Y_val
 
-        # if not self.validation:
-        #     # Default to pos
-        #     features, labels = self.X_train_pos, self.Y_train_pos
-        #     idx = index % self.X_train_pos.len()
-
         image, label = (torch.from_numpy(features[idx]),
                         torch.from_numpy(labels[idx]))
 
         # image, label = self._random_crop_([image, label], (64, 64))
         # image, label = self._random_flip_([image, label])
+        image = self._noise_(image, f=0.02)
+        image = self._adjust_contrast_(image, r=.4, m=.8)
+        image = self._adjust_brightness_(image, r=.4, m=.8)
         image, label = self._elastic_deformation_([image, label],
-                                                  k=5,
-                                                  sigma=10,
-                                                  alpha=.2)
-        # image, label = self._affine_([image, label.unsqueeze(0)])
-        image = self._noise_(image, 0.01)
-        image = self._adjust_brightness_(image, torch.rand(1)*.5 + .75)
-        image = self._adjust_contrast_(image, torch.rand(1)*5 + .75)
+                                                  k=21,
+                                                  sigma=8,
+                                                  alpha=2.)
+        image, label = self._affine_([image, label.unsqueeze(0)], sh=False)
         return image, label.to(torch.long).squeeze(0)
 
     def _augment_(self, img: List[Tensor]):
@@ -529,7 +542,7 @@ class Buildings(Dataset):
 
         :param img: List of tensors in [feature, label] format
         """
-        pass
+        return img
 
 
 if not os.path.exists("Training/training_data.hdf5"):
