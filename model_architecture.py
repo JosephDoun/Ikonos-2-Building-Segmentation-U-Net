@@ -17,12 +17,12 @@ class BuildingsModel(nn.Module):
         self.down_2 = DownSamplingBlock(self.down_1.conv2.out_channels, 2,
                                         dropout=(0.0, 0.0))
         self.down_3 = DownSamplingBlock(self.down_2.conv2.out_channels, 2,
-                                        dropout=(0.0, 0.0))
+                                        dropout=(0., 0.))
         self.down_4 = DownSamplingBlock(self.down_3.conv2.out_channels, 2,
                                         dropout=(0., 0.))
         self.down_5 = DownSamplingBlock(self.down_4.conv2.out_channels, 2,
                                         max_pooling=False,
-                                        dropout=(0.4, 0.4))
+                                        dropout=(0.5, 0.5))
         self.up_1 = UpSamplingBlock(self.down_5.conv2.out_channels, 2,
                                     skip_channels=self.down_4.conv2.out_channels,
                                     dropout=(0., 0.))
