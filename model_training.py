@@ -99,10 +99,8 @@ class Training:
             ax.set_xlabel("Epochs",
                           fontsize=14)
             ax.set_facecolor((.9, .9, .9))
-            ax.set_xticks([i or 1 for i in range(self.report_rate,
-                                                 self.argv.epochs+1,
-                                                 self.report_rate)])
-            ax.set_xticklabels([i or 1 for i in range(self.report_rate,
+            ax.set_xticks(list(range((self.argv.epochs//self.report_rate)+1)))
+            ax.set_xticklabels([i or 1 for i in range(0,
                                                       self.argv.epochs+1,
                                                       self.report_rate)])
 
