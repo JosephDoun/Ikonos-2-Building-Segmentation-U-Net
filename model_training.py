@@ -74,20 +74,37 @@ class Training:
             'neg_validation_loss': []
         }
         self.r_fig, self.r_axes = plt.subplots(1, 2, figsize=(15, 10))
-        
+
         augs = self.training_loader.dataset.augmentations
-        
-        # TODO organize augmentations on title
+        group_1 = {k: l for k, l in list(augs.items())[:len(augs)//2]}
+        group_2 = {k: l for k, l in list(augs.items())[len(augs)//2:]}
+        del augs
+
         self.r_fig.suptitle(
+            f" Training Report - Balance:{self.argv.balance_ratio} "
+            f"- Scale:{self.argv.init_scale} "
+            f"- Batch size:{self.argv.batch_size} "
+            f"- Report rate:{self.report_rate}"
             f"""
-        Training Report - Balance: {self.argv.balance_ratio} - Scale:{self.argv.init_scale}
-        {self.training_loader.dataset.augmentations
-        }"""
-        )
+        {group_1}
+        {group_2}""",
+            fontsize=13)
+
+        self.means = torch.zeros(6)
+        self.divisor = 0
+
         for ax in self.r_axes:
-            ax.set_ylabel("Cross Entropy Loss")
-            ax.set_xlabel("Relevant Epochs")
+            ax.set_ylabel("Averaged Cross Entropy Loss per Interval",
+                          fontsize=14)
+            ax.set_xlabel("Epochs",
+                          fontsize=14)
             ax.set_facecolor((.9, .9, .9))
+            ax.set_xticks([i or 1 for i in range(self.report_rate,
+                                                 self.argv.epochs+1,
+                                                 self.report_rate)])
+            ax.set_xticklabels([i or 1 for i in range(self.report_rate,
+                                                      self.argv.epochs+1,
+                                                      self.report_rate)])
 
     def _init_monitor_figures(self):
         self.t_monitor_idx = torch.randint(
@@ -156,7 +173,7 @@ class Training:
             loss, _loss = self.__compute_loss__(z, Y)
             loss.backward()
             self.optimizer.step()
-            self._compute_metrics_(i, a, Y, _loss, metrics)
+            self._compute_metrics_(i, a, Y, _loss, metrics, training_loader)
             if all([self.argv.monitor and i == self.t_monitor_idx,
                     epoch == 1 or not epoch % self.report_rate]):
                 self.__monitor_sample__(epoch=epoch,
@@ -172,8 +189,8 @@ class Training:
             metrics = torch.zeros(
                 3,
                 len(validation_loader.dataset),
-                512,
-                512,
+                validation_loader.dataset[0][1].shape[-2],
+                validation_loader.dataset[0][1].shape[-1],
                 device='cuda'
             )
             for i, (X, Y) in enumerate(validation_loader):
@@ -181,7 +198,8 @@ class Training:
                 Y = Y.to('cuda')
                 z, a = self.model(X)
                 loss, _loss = self.__compute_loss__(z, Y)
-                self._compute_metrics_(i, a, Y, _loss, metrics)
+                self._compute_metrics_(
+                    i, a, Y, _loss, metrics, validation_loader)
 
                 if all([self.argv.monitor and i == self.v_monitor_idx,
                         epoch == 1 or not epoch % self.check_rate]):
@@ -201,9 +219,9 @@ class Training:
         loss = self.loss_fn(z, Y)
         return loss.mean(), loss
 
-    def _compute_metrics_(self, i, a, Y, loss, metrics: Tensor):
+    def _compute_metrics_(self, i, a, Y, loss, metrics: Tensor, loader):
         _, predictions = a.max(-3)
-        idx = i * self.argv.batch_size
+        idx = i * loader.batch_size
         _ = slice(idx, idx+Y.size(0))
         metrics[0, _] = predictions
         metrics[1, _] = Y
@@ -271,7 +289,7 @@ class Training:
                                      shuffle=True)
         validation_loader = DataLoader(Buildings(validation=True,
                                                  ratio=self.argv.balance_ratio),
-                                       batch_size=self.argv.batch_size,
+                                       batch_size=1,
                                        num_workers=self.argv.num_workers,
                                        pin_memory=True)
         self.training_batches = -(-len(training_loader.dataset) //
@@ -341,26 +359,35 @@ class Training:
             )
         )
 
+        self.means += torch.Tensor(
+            [_['TL'], _['TLpos'], _['TLneg'],
+             _['VL'], _['VLpos'], _['VLneg']]
+        )
+        self.divisor += 1
+
         if self.argv.report and (not epoch % self.report_rate
                                  or epoch == 1):
+            self.means /= self.divisor
             self.report['total_training_loss'].append(
-                _['TL']
+                self.means[0].item()
             )
             self.report['total_validation_loss'].append(
-                _['VL']
+                self.means[3].item()
             )
             self.report['pos_training_loss'].append(
-                _['TLpos']
+                self.means[1].item()
             )
             self.report['neg_training_loss'].append(
-                _['TLneg']
+                self.means[2].item()
             )
             self.report['pos_validation_loss'].append(
-                _['VLpos']
+                self.means[4].item()
             )
             self.report['neg_validation_loss'].append(
-                _['VLneg']
+                self.means[5].item()
             )
+            self.means.zero_()
+            self.divisor = 0
 
     def __monitor_layers__(self, epoch):
 
@@ -440,7 +467,10 @@ class Training:
 
         for ax in self.r_axes:
             ax.legend_ or ax.legend()
-            
+            # ax.set_xticklabels(range(self.report_rate,
+            #                          self.argv.epochs+1,
+            #                          self.report_rate))
+
         os.makedirs("Reports", exist_ok=True)
         log.info(
             "  -- Reporting Active: Saving Report -- "

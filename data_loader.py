@@ -395,9 +395,9 @@ class Buildings(Dataset):
             return img[0], img[1]
 
         degrees = torch.rand(1).item() * 360 - 180
-        translations = [int(img[0].shape[-2] * .15 * torch.rand(1)),
-                        int(img[0].shape[-1] * .15 * torch.rand(1))]
-        scale = torch.rand(1) * 0.3 + .85
+        translations = [int(img[0].shape[-2] * .2 * torch.rand(1)),
+                        int(img[0].shape[-1] * .2 * torch.rand(1))]
+        scale = torch.rand(1) * 1 + .5
         shear = sh * (torch.rand(1).item() * 120 - 60)
 
         img[0] = F.affine(img[0], angle=degrees,
@@ -525,14 +525,14 @@ class Buildings(Dataset):
                         torch.from_numpy(labels[idx]))
 
         # image, label = self._random_crop_([image, label], (64, 64))
-        # image, label = self._random_flip_([image, label])
+        image, label = self._random_flip_([image, label])
         image = self._noise_(image, f=0.02)
         image = self._adjust_contrast_(image, r=.4, m=.8)
         image = self._adjust_brightness_(image, r=.4, m=.8)
         image, label = self._elastic_deformation_([image, label],
                                                   k=21,
-                                                  sigma=8,
-                                                  alpha=2.)
+                                                  sigma=8.,
+                                                  alpha=2)
         image, label = self._affine_([image, label.unsqueeze(0)], sh=False)
         return image, label.to(torch.long).squeeze(0)
 
