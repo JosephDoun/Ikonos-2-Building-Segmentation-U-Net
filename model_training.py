@@ -65,6 +65,7 @@ class Training:
         self.__init_scheduler__()
 
     def _init_report_figure_(self):
+        os.makedirs("Reports", exist_ok=True)
         self.report = {
             'total_training_loss': [],
             'pos_training_loss': [],
@@ -87,7 +88,8 @@ class Training:
             f"- Report rate:{self.report_rate}"
             f"""
         {group_1}
-        {group_2}""",
+        {group_2}
+        Dropouts: {[m[1].p for m in self.model.named_modules()]}""",
             fontsize=13)
 
         self.means = torch.zeros(6)
@@ -105,6 +107,8 @@ class Training:
                                                       self.report_rate)])
 
     def _init_monitor_figures(self):
+        os.makedirs("Monitoring/Activations", exist_ok=True)
+        os.makedirs("Monitoring/Predictions", exist_ok=True)
         self.t_monitor_idx = torch.randint(
             self.training_batches, (1,)
         )
@@ -150,9 +154,9 @@ class Training:
                 self.pred_fig.savefig('Monitoring/Predictions/results_epoch_%d.png'
                                       % epoch)
                 self.__monitor_layers__(epoch)
-                # self.__adjust_learning_rates__(layer_abs_means)
+
             # Feed loss to scheduler
-            # self.scheduler.step(training_metrics[-1].mean())
+            self.scheduler.step(training_metrics[-1].mean())
 
     def __train_epoch__(self, epoch, training_loader):
         self.model.train()
@@ -270,8 +274,8 @@ class Training:
     def __init_scheduler__(self):
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,
                                                               'min',
-                                                              0.1,
-                                                              patience=100,
+                                                              0.5,
+                                                              patience=10,
                                                               verbose=True,
                                                               min_lr=5e-7)
         if self.argv.reload:
@@ -465,11 +469,7 @@ class Training:
 
         for ax in self.r_axes:
             ax.legend_ or ax.legend()
-            # ax.set_xticklabels(range(self.report_rate,
-            #                          self.argv.epochs+1,
-            #                          self.report_rate))
 
-        os.makedirs("Reports", exist_ok=True)
         log.info(
             "  -- Reporting Active: Saving Report -- "
         )

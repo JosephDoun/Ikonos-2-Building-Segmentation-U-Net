@@ -46,7 +46,7 @@ parser.add_argument("--reload",
 parser.add_argument("--init-scale", "-i",
                     help="""
                     The factor to initially multiply input channels with:
-                    in_channels*init_scale = out_channels
+                    in_channels*INIT_SCALE = out_channels
                     -- Controls overall U-net feature length
                     """,
                     default=8,
