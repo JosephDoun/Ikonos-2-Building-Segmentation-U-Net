@@ -370,7 +370,7 @@ class Buildings(Dataset):
             return img
         factor = torch.rand(1) * r + m
         mean = img.mean((-3, -2, -1), keepdim=True)
-        return (factor * img + (1 - factor) * mean)  # .clamp(0, 1)
+        return (factor * img + (1 - factor) * mean).clamp(0, 1)
 
     @log_augmentation
     def _adjust_brightness_(self, img: Tensor, r: float, m: float):
@@ -384,7 +384,7 @@ class Buildings(Dataset):
         if self.validation:
             return img
         factor = torch.rand(1) * r + m
-        return img*factor  # .clamp(0, 1)
+        return img*factor.clamp(0, 1)
 
     @log_augmentation
     def _affine_(self, img: List[Tensor], sh: bool = False):
@@ -427,7 +427,7 @@ class Buildings(Dataset):
         if self.validation:
             return img
         img = img + torch.randn_like(img) * f
-        return img # .clamp(0, 1)
+        return img.clamp(0, 1)
 
     @log_augmentation
     def _elastic_deformation_(self, img: List[Tensor],
@@ -530,10 +530,10 @@ class Buildings(Dataset):
         image = self._adjust_contrast_(image, r=.4, m=.8)
         image = self._adjust_brightness_(image, r=.4, m=.8)
         image, label = self._elastic_deformation_([image, label],
-                                                  k=21,
+                                                  k=5,
                                                   sigma=8.,
-                                                  alpha=2)
-        image, label = self._affine_([image, label.unsqueeze(0)], sh=False)
+                                                  alpha=0.2)
+        image, label = self._affine_([image, label.unsqueeze(0)], sh=True)
         return image, label.to(torch.long).squeeze(0)
 
     def _augment_(self, img: List[Tensor]):
