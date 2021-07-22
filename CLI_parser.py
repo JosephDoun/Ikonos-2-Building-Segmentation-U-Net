@@ -57,7 +57,7 @@ parser.add_argument("--checkpoint", "-c",
                     type=str)
 parser.add_argument("--augmentation", "-a",
                     help="Float within [0, 1], training samples percentage "
-                    "to augment. NOT USED to be removed.",
+                    "to augment. Applies to distribution changing augmentations.",
                     default=1.0,
                     type=float)
 parser.add_argument("--balance-ratio", '-b',

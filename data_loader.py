@@ -338,7 +338,7 @@ class Buildings(Dataset):
         return wrapper
 
     def __init__(self, validation: bool = False,
-                 aug_split=.66, ratio=10):
+                 aug_split=1., ratio=2):
 
         self.aug_split = aug_split
         self.validation = validation
@@ -366,7 +366,7 @@ class Buildings(Dataset):
         :param m: minimum value
         :param f: adjustment factor
         """
-        if self.validation:
+        if self.validation or torch.rand(1) > self.aug_split:
             return img
         factor = torch.rand(1) * r + m
         mean = img.mean((-3, -2, -1), keepdim=True)
@@ -381,7 +381,7 @@ class Buildings(Dataset):
         :param f: Adjustment factor. Brightness increases for f > 1.
                   Decreases for f < 1.
         """
-        if self.validation:
+        if self.validation or torch.rand(1) > self.aug_split:
             return img
         factor = torch.rand(1) * r + m
         return img*factor.clamp(0, 1)
@@ -397,8 +397,8 @@ class Buildings(Dataset):
         degrees = torch.rand(1).item() * 360 - 180
         translations = [int(img[0].shape[-2] * .2 * torch.rand(1)),
                         int(img[0].shape[-1] * .2 * torch.rand(1))]
-        scale = torch.rand(1) * 1 + .5
-        shear = sh * (torch.rand(1).item() * 120 - 60)
+        scale = torch.rand(1) * 1.6 + 0.2
+        shear = sh * (torch.rand(1).item() * 60 - 30)
 
         img[0] = F.affine(img[0], angle=degrees,
                           translate=translations,
@@ -473,7 +473,7 @@ class Buildings(Dataset):
                                   align_corners=True,
                                   mode='bicubic').reshape(img[1].shape)
         img[1][img[1] > 0.5] = 1
-        return img
+        return img[0].clamp(0, 1), img[1]
 
     @log_augmentation
     def _random_crop_(self, img: List[Tensor], size: Tuple[int]):
@@ -526,13 +526,13 @@ class Buildings(Dataset):
 
         # image, label = self._random_crop_([image, label], (64, 64))
         image, label = self._random_flip_([image, label])
-        image = self._noise_(image, f=0.02)
-        image = self._adjust_contrast_(image, r=.4, m=.8)
-        image = self._adjust_brightness_(image, r=.4, m=.8)
-        image, label = self._elastic_deformation_([image, label],
-                                                  k=5,
-                                                  sigma=8.,
-                                                  alpha=0.2)
+        image = self._noise_(image, f=0.01)
+        # image = self._adjust_contrast_(image, r=.2, m=.9)
+        # image = self._adjust_brightness_(image, r=.2, m=.9)
+        # image, label = self._elastic_deformation_([image, label],
+        #                                           k=21,
+        #                                           sigma=8.,
+        #                                           alpha=1.)
         image, label = self._affine_([image, label.unsqueeze(0)], sh=True)
         return image, label.to(torch.long).squeeze(0)
 

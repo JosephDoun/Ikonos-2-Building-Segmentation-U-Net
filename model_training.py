@@ -20,8 +20,8 @@ import torch.optim as optim
 import torch
 
 logging.basicConfig(
-    format='%(asctime)s %(levelname)s:%(name)s: %(message)s',
-    level=logging.DEBUG,
+    format='%(asctime)s %(name)s: %(message)s',
+    level=logging.INFO,
     datefmt='%H:%M:%S %b%d'
 )
 
@@ -50,7 +50,8 @@ class Training:
         self.loss_fn = CrossEntropyLoss(reduction='none')
         self.optimizer = self.__init_optimizer__()
         self.training_loader, self.validation_loader = self.__init_loaders__()
-
+        self.iou = self.fscore = 0
+        
         if self.argv.report:
             """
             # TODO
@@ -75,7 +76,8 @@ class Training:
             'neg_validation_loss': []
         }
         self.r_fig, self.r_axes = plt.subplots(1, 2, figsize=(15, 10))
-
+        self.acc_text = self.r_fig.text(0.4, 0.01, "")
+        
         augs = self.training_loader.dataset.augmentations
         group_1 = {k: l for k, l in list(augs.items())[:len(augs)//2]}
         group_2 = {k: l for k, l in list(augs.items())[len(augs)//2:]}
@@ -85,11 +87,13 @@ class Training:
             f" Training Report - Balance:{self.argv.balance_ratio} "
             f"- Scale:{self.argv.init_scale} "
             f"- Batch size:{self.argv.batch_size} "
-            f"- Report rate:{self.report_rate}"
+            f"- Report rate:{self.report_rate} "
+            f"- Batchnorm:{'batchnorm' in map(lambda x: x[0], self.model.named_modules())}"
             f"""
         {group_1}
         {group_2}
-        Dropouts: {[m[1].p for m in self.model.named_modules()]}""",
+        Dropouts: {[m[1].p for m in self.model.named_modules()
+        if 'dropout' in m[0]]}""",
             fontsize=13)
 
         self.means = torch.zeros(6)
@@ -267,8 +271,9 @@ class Training:
 
         if self.argv.reload:
             opt.load_state_dict(self.checkpoint['optimizer_state'])
-            for p in opt.param_groups:
-                p['lr'] = self.argv.lr
+            # Uncomment for manual assignment without scheduler:
+            # for p in opt.param_groups:
+            #     p['lr'] = self.argv.lr
         return opt
 
     def __init_scheduler__(self):
@@ -342,7 +347,7 @@ class Training:
             _[mode+'Lneg'] = m[2][m[1] == 0].mean()
 
         log.info(
-            "[ E%4d /%4d :: %s L %2.3f Lpos %2.3f Lneg %2.3f - IoU %2.3f ::"
+            "[ E%4d/%4d :: %s L %2.3f Lpos %2.3f Lneg %2.3f - IoU %2.3f ::"
             " %s L %2.3f Lpos %2.3f Lneg %2.3f - IoU %2.3f / F %2.3f ]"
             % (
                 epoch,
@@ -367,6 +372,11 @@ class Training:
         )
         self.divisor += 1
 
+        if _['VIOU'] > self.iou:
+            self.iou = _['VIOU'].item()
+        if _['VF'] > self.fscore:
+            self.fscore = _['VF'].item()
+        
         if self.argv.report and (not epoch % self.report_rate
                                  or epoch == 1):
             self.means /= self.divisor
@@ -466,7 +476,12 @@ class Training:
                             ls='--')
         self.r_axes[1].plot(self.report['neg_validation_loss'],
                             label='neg_val_loss', color=(.5, .5, .5))
-
+        
+        self.acc_text = \
+        self.r_fig.text(0.4, 0.01,
+                        "Best Iou: %2.1f%% :: Best F-Score: %2.1f%%"
+                        % (self.iou * 100, self.fscore * 100), fontsize=14)
+        
         for ax in self.r_axes:
             ax.legend_ or ax.legend()
 
@@ -475,7 +490,8 @@ class Training:
         )
         self.r_fig.savefig(
             f"Reports/report_b{self.argv.balance_ratio}_{run_time}.png")
-
+        self.acc_text.remove()
+        
         for ax in self.r_axes:
             for line in ax.lines:
                 line.remove()
