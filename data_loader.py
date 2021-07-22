@@ -397,7 +397,7 @@ class Buildings(Dataset):
         degrees = torch.rand(1).item() * 360 - 180
         translations = [int(img[0].shape[-2] * .2 * torch.rand(1)),
                         int(img[0].shape[-1] * .2 * torch.rand(1))]
-        scale = torch.rand(1) * 1.6 + 0.2
+        scale = torch.rand(1) * 6 + .7
         shear = sh * (torch.rand(1).item() * 60 - 30)
 
         img[0] = F.affine(img[0], angle=degrees,
