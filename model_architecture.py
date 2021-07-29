@@ -23,7 +23,7 @@ class BuildingsModel(nn.Module):
                                         dropout=(0.1, 0.1))
         self.down_5 = DownSamplingBlock(self.down_4.conv2.out_channels, 2,
                                         max_pooling=False,
-                                        dropout=(0.2, 0.2))
+                                        dropout=(0.3, 0.3))
         self.up_1 = UpSamplingBlock(self.down_5.conv2.out_channels, 2,
                                     skip_channels=self.down_4.conv2.out_channels,
                                     dropout=(0., 0.))
