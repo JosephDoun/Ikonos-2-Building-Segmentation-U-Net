@@ -16,9 +16,9 @@ class BuildingsModel(nn.Module):
         self.down_1 = DownSamplingBlock(in_channels, init_out_factor,
                                         dropout=(0., 0.))
         self.down_2 = DownSamplingBlock(self.down_1.conv2.out_channels, 2,
-                                        dropout=(0., 0.))
+                                        dropout=(0.1, 0.1))
         self.down_3 = DownSamplingBlock(self.down_2.conv2.out_channels, 2,
-                                        dropout=(0., 0.))
+                                        dropout=(0.1, 0.1))
         self.down_4 = DownSamplingBlock(self.down_3.conv2.out_channels, 2,
                                         dropout=(0.1, 0.1))
         self.down_5 = DownSamplingBlock(self.down_4.conv2.out_channels, 2,
