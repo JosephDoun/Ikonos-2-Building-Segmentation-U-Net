@@ -397,7 +397,7 @@ class Buildings(Dataset):
         degrees = torch.rand(1).item() * 360 - 180
         translations = [int(img[0].shape[-2] * .2 * torch.rand(1)),
                         int(img[0].shape[-1] * .2 * torch.rand(1))]
-        scale = torch.rand(1) * 6 + .7
+        scale = torch.rand(1) * .6 + .7
         shear = sh * (torch.rand(1).item() * 60 - 30)
 
         img[0] = F.affine(img[0], angle=degrees,
@@ -529,11 +529,11 @@ class Buildings(Dataset):
         image = self._noise_(image, f=0.01)
         # image = self._adjust_contrast_(image, r=.2, m=.9)
         # image = self._adjust_brightness_(image, r=.2, m=.9)
-        # image, label = self._elastic_deformation_([image, label],
-        #                                           k=21,
-        #                                           sigma=8.,
-        #                                           alpha=1.)
-        image, label = self._affine_([image, label.unsqueeze(0)], sh=False)
+        image, label = self._elastic_deformation_([image, label],
+                                                  k=3,
+                                                  sigma=10.,
+                                                  alpha=.1)
+        image, label = self._affine_([image, label.unsqueeze(0)], sh=True)
         return image, label.to(torch.long).squeeze(0)
 
     def _augment_(self, img: List[Tensor]):
