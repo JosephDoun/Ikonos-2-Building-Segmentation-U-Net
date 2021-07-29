@@ -533,7 +533,7 @@ class Buildings(Dataset):
         #                                           k=21,
         #                                           sigma=8.,
         #                                           alpha=1.)
-        image, label = self._affine_([image, label.unsqueeze(0)], sh=True)
+        image, label = self._affine_([image, label.unsqueeze(0)], sh=False)
         return image, label.to(torch.long).squeeze(0)
 
     def _augment_(self, img: List[Tensor]):
