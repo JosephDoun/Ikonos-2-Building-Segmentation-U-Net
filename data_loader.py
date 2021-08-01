@@ -3,7 +3,6 @@
 from typing import Iterable, List, Tuple
 import h5py
 import numpy as np
-from numpy.lib.twodim_base import eye
 from osgeo import gdal_array, gdal
 from torch.utils.data import Dataset
 from glob import glob
@@ -20,7 +19,7 @@ from sys import argv
 logging.basicConfig(
     format='%(asctime)s %(levelname)s:%(name)s: %(message)s',
     level=logging.DEBUG,
-    datefmt='%H:%M:%S %b %d'
+    datefmt='%b%d %H:%M:%S'
 )
 
 log = logging.getLogger(argv[0])
@@ -57,8 +56,8 @@ def to_tiles(X, Y, tile_size=512):
     if X.ndim == 3 and tile_size == 512:
         # Pad X to be divisible by tile size
         X = np.pad(X, ((0, 0),
-                       (0, tile_size - X.shape[1] % tile_size),
-                       (0, tile_size - X.shape[2] % tile_size)),
+                       (0, tile_size - X.shape[-2] % tile_size),
+                       (0, tile_size - X.shape[-1] % tile_size)),
                    constant_values=0)
 
         channel_axis = X.shape.index(min(X.shape))
@@ -163,8 +162,7 @@ def make_training_hdf5(train_tiles=512, val_tiles=512):
     log.info(
         "Creating HDF5 dataset for training and validation"
     )
-    for x, y in zip(glob('Training/x*.tif'), glob('Training/y*.tif')):
-
+    for x, y in zip(sorted(glob('Training/x*.tif')), sorted(glob('Training/y*.tif'))):
         log.info(
             "Processing sub area %s with labels %s " % (x, y)
         )
@@ -479,9 +477,11 @@ class Buildings(Dataset):
     def _random_crop_(self, img: List[Tensor], size: Tuple[int]):
         if self.validation:
             return img
-        p = transforms.RandomCrop.get_params(img[0], size)
-        img[0] = F.crop(img[0], *p)
-        img[1] = F.crop(img[1], *p)
+        top = torch.randint(img[0].shape[-2] - size, (1,))
+        left = torch.randint(img[0].shape[-1] - size, (1,))
+        height = width = size
+        img[0] = F.crop(img[0], top, left, height, width)
+        img[1] = F.crop(img[1], top, left, height, width)
         return img
 
     def __len__(self):
@@ -526,11 +526,11 @@ class Buildings(Dataset):
 
         # image, label = self._random_crop_([image, label], (64, 64))
         image, label = self._random_flip_([image, label])
-        image = self._noise_(image, f=0.01)
-        # image = self._adjust_contrast_(image, r=.2, m=.9)
-        # image = self._adjust_brightness_(image, r=.2, m=.9)
+        image = self._noise_(image, f=0.015)
+        # image = self._adjust_contrast_(image, r=.3, m=.85)
+        # image = self._adjust_brightness_(image, r=.3, m=.85)
         image, label = self._elastic_deformation_([image, label],
-                                                  k=3,
+                                                  k=5,
                                                   sigma=10.,
                                                   alpha=.1)
         image, label = self._affine_([image, label.unsqueeze(0)], sh=True)

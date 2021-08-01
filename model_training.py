@@ -22,7 +22,7 @@ import torch
 logging.basicConfig(
     format='%(asctime)s %(name)s: %(message)s',
     level=logging.INFO,
-    datefmt='%H:%M:%S %b%d'
+    datefmt='%b%d %H:%M:%S'
 )
 
 log = logging.getLogger(__name__)
@@ -366,11 +366,12 @@ class Training:
             )
         )
 
-        self.means += torch.Tensor(
-            [_['TL'], _['TLpos'], _['TLneg'],
-             _['VL'], _['VLpos'], _['VLneg']]
-        )
-        self.divisor += 1
+        if self.argv.report:
+            self.means += torch.Tensor(
+                [_['TL'], _['TLpos'], _['TLneg'],
+                _['VL'], _['VLpos'], _['VLneg']]
+            )
+            self.divisor += 1
 
         if _['VIOU'] > self.iou:
             self.iou = _['VIOU'].item()
