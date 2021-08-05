@@ -464,12 +464,14 @@ class Buildings(Dataset):
         img[0] = nn_F.grid_sample(img[0].unsqueeze(0),
                                   eye_grid,
                                   align_corners=True,
-                                  mode='bicubic').squeeze(0)
+                                  mode='bicubic',
+                                  padding_mode='reflection').squeeze(0)
 
         img[1] = nn_F.grid_sample(img[1].float().reshape(1, 1, *img[1].shape),
                                   eye_grid,
                                   align_corners=True,
-                                  mode='bicubic').reshape(img[1].shape)
+                                  mode='bicubic',
+                                  padding_mode='reflection').reshape(img[1].shape)
         img[1][img[1] > 0.5] = 1
         return img[0].clamp(0, 1), img[1]
 
@@ -526,7 +528,7 @@ class Buildings(Dataset):
 
         # image, label = self._random_crop_([image, label], (64, 64))
         image, label = self._random_flip_([image, label])
-        image = self._noise_(image, f=0.015)
+        image = self._noise_(image, f=0.01)
         # image = self._adjust_contrast_(image, r=.3, m=.85)
         # image = self._adjust_brightness_(image, r=.3, m=.85)
         image, label = self._elastic_deformation_([image, label],

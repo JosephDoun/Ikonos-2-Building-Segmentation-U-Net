@@ -79,8 +79,8 @@ class Training:
         self.acc_text = self.r_fig.text(0.4, 0.01, "")
         
         augs = self.training_loader.dataset.augmentations
-        group_1 = {k: l for k, l in list(augs.items())[:len(augs)//2]}
-        group_2 = {k: l for k, l in list(augs.items())[len(augs)//2:]}
+        group_1 = {k: l for k, l in list(augs.items())[:len(augs)//2+1]}
+        group_2 = {k: l for k, l in list(augs.items())[len(augs)//2+1:]}
         del augs
 
         self.r_fig.suptitle(
@@ -282,7 +282,7 @@ class Training:
                                                               0.5,
                                                               patience=10,
                                                               verbose=True,
-                                                              min_lr=5e-7)
+                                                              min_lr=5e-8)
         if self.argv.reload:
             self.scheduler.load_state_dict(self.checkpoint['scheduler_state'])
 
@@ -490,7 +490,7 @@ class Training:
             "  -- Reporting Active: Saving Report -- "
         )
         self.r_fig.savefig(
-            f"Reports/report_b{self.argv.balance_ratio}_{run_time}.png")
+            f"Reports/report_{run_time}.png")
         self.acc_text.remove()
         
         for ax in self.r_axes:
