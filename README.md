@@ -1,10 +1,13 @@
+<!--
 <style>
     div.sections {
         background-color: #999;
         border-radius: 5px;
         }
 </style>
-
+<script>
+</script>
+-->
 <body>
     <div>
         <h1 style='text-align:center'> A U-Net implementation for Building Segmentation on Ikonos-2 Satellite Images </h1>
