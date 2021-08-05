@@ -19,7 +19,7 @@
                 <div style='border-width:1px;padding:5px'>
                     <h2>Training Environment</h4>
                     <h3 style='text-align:justify'>Training mainly followed the recommendations of Ronneberger et al. (2015). Additional training ideas and methods were adopted from
-                        <a url='https://www.google.com/search?channel=fs&client=ubuntu&q=deep+learning+with+pytorch'>Deep Learning with PyTorch</a> by Eli Stevens, Luca Antiga and Thomas Viehmann (2020)
+                        <a href='https://www.google.com/search?channel=fs&client=ubuntu&q=deep+learning+with+pytorch'>Deep Learning with PyTorch</a> by Eli Stevens, Luca Antiga and Thomas Viehmann (2020)
                     </h3>
                     <p></p>
                 </div>
