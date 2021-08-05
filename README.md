@@ -1,10 +1,10 @@
 <body>
     <div>
         <h1 align='center'> A U-Net implementation for Building Segmentation on Ikonos-2 Satellite Images </h1>
-        <h3 align='center'>
+        <h4 align='center'>
             Project based on the original <a href="https://arxiv.org/abs/1505.04597">U-Net paper</a>
             by Olaf Ronneberger, Philipp Fischer and Thomas Brox
-        </h3>
+        </h4>
     </div>
     <div class='sections'>
         <ol>
