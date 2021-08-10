@@ -335,10 +335,8 @@ class Buildings(Dataset):
             return r
         return wrapper
 
-    def __init__(self, validation: bool = False,
-                 aug_split=1., ratio=2):
+    def __init__(self, validation: bool = False, ratio=2):
 
-        self.aug_split = aug_split
         self.validation = validation
         self.ratio = ratio
 
@@ -364,7 +362,7 @@ class Buildings(Dataset):
         :param m: minimum value
         :param f: adjustment factor
         """
-        if self.validation or torch.rand(1) > self.aug_split:
+        if self.validation:
             return img
         factor = torch.rand(1) * r + m
         mean = img.mean((-3, -2, -1), keepdim=True)
@@ -379,7 +377,7 @@ class Buildings(Dataset):
         :param f: Adjustment factor. Brightness increases for f > 1.
                   Decreases for f < 1.
         """
-        if self.validation or torch.rand(1) > self.aug_split:
+        if self.validation:
             return img
         factor = torch.rand(1) * r + m
         return img*factor.clamp(0, 1)
@@ -529,12 +527,12 @@ class Buildings(Dataset):
         # image, label = self._random_crop_([image, label], (64, 64))
         image, label = self._random_flip_([image, label])
         image = self._noise_(image, f=0.01)
-        # image = self._adjust_contrast_(image, r=.3, m=.85)
-        # image = self._adjust_brightness_(image, r=.3, m=.85)
+        image = self._adjust_contrast_(image, r=.3, m=.85)
+        image = self._adjust_brightness_(image, r=.3, m=.85)
         image, label = self._elastic_deformation_([image, label],
                                                   k=5,
-                                                  sigma=10.,
-                                                  alpha=.1)
+                                                  sigma=5.,
+                                                  alpha=.25)
         image, label = self._affine_([image, label.unsqueeze(0)], sh=True)
         return image, label.to(torch.long).squeeze(0)
 

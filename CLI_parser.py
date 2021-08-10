@@ -14,7 +14,7 @@ parser.add_argument("--batch-size",
                     type=int)
 parser.add_argument("--num-workers",
                     help="Number of background processes "
-                            "for data loading",
+                    "for data loading",
                     default=4,
                     type=int)
 parser.add_argument("--lr",
@@ -35,9 +35,10 @@ parser.add_argument("--monitor", "-m",
                     const=1,
                     action='store_const')
 parser.add_argument("--l2",
-                    help='L2 Regularization parameter',
-                    default=0,
-                    type=float)
+                    help='L2 Regularization parameters. Sequence of length 5. Applied like dropouts.',
+                    default=[0.]*5,
+                    type=float,
+                    nargs='+')
 parser.add_argument("--reload",
                     help='Load checkpoint and continue training',
                     default=0,
@@ -55,11 +56,6 @@ parser.add_argument("--checkpoint", "-c",
                     help="Path to saved checkpoint",
                     default="Checkpoints/checkpoint.pt",
                     type=str)
-parser.add_argument("--augmentation", "-a",
-                    help="Float within [0, 1], training samples percentage "
-                    "to augment. Applies to distribution changing augmentations.",
-                    default=1.0,
-                    type=float)
 parser.add_argument("--balance-ratio", '-b',
                     type=int,
                     default=2,
@@ -71,6 +67,9 @@ parser.add_argument("--report-rate",
                     Epoch frequency to log losses for reporting.
                     Default: EPOCHS // 10
                     """)
+parser.add_argument('--dropouts', '-d', type=float,
+                    nargs='+', default=[0.]*5,
+                    help='Sequence of length 5. Dropout probabilities for each NN block (positions 0-4). Applied symmetrically.')
 parser.add_argument("--check-rate",
                     type=int,
                     default=0,

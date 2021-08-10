@@ -41,13 +41,14 @@ class Training:
         self.argv = parser.parse_args(argv)
         self.report_rate = self.argv.report_rate or self.argv.epochs // 10
         self.check_rate = self.argv.check_rate or self.argv.epochs // 10
-
         if self.argv.reload:
             self.checkpoint = self.__load_checkpoint__()
             self.epoch = self.checkpoint['epoch']
 
         self.model = self.__init_model__()
-        self.loss_fn = CrossEntropyLoss(reduction='none')
+        self.loss_fn = CrossEntropyLoss(reduction='none',
+                                        weight=torch.tensor([1., 2.],
+                                                            device='cuda'))
         self.optimizer = self.__init_optimizer__()
         self.training_loader, self.validation_loader = self.__init_loaders__()
         self.iou = self.fscore = 0
@@ -97,7 +98,7 @@ class Training:
             fontsize=13)
 
         self.means = torch.zeros(6)
-        self.divisor = 0
+        self.denom = 0
 
         for ax in self.r_axes:
             ax.set_ylabel("Averaged Cross Entropy Loss per Interval",
@@ -234,7 +235,7 @@ class Training:
         metrics[2, _] = loss
 
     def __init_model__(self):
-        model = BuildingsModel(4, self.argv.init_scale)
+        model = BuildingsModel(4, self.argv.init_scale, self.argv.dropouts)
         if torch.cuda.is_available():
             model = model.to('cuda')
         if self.argv.reload:
@@ -247,27 +248,29 @@ class Training:
         """
         opt = optim.Adam([
             {'params': self.model.down_1.parameters(),
-             'weight_decay': 0.00000},
+             'weight_decay': self.argv.l2[0]},
             {'params': self.model.down_2.parameters(),
-             'weight_decay': 0.00000},
+             'weight_decay': self.argv.l2[1]},
             {'params': self.model.down_3.parameters(),
-             'weight_decay': 0.00000},
+             'weight_decay': self.argv.l2[2]},
             {'params': self.model.down_4.parameters(),
-             'weight_decay': 0.00000},
+             'weight_decay': self.argv.l2[3]},
             {'params': self.model.down_5.parameters(),
-             'weight_decay': 0.00000},
+             'weight_decay': self.argv.l2[4]},
             {'params': self.model.up_1.parameters(),
-             'weight_decay': 0.00000},
+             'weight_decay': self.argv.l2[3]},
             {'params': self.model.up_2.parameters(),
-             'weight_decay': 0.00000},
-            {'params': self.model.up_3.parameters()},
-            {'params': self.model.up_4.parameters()},
+             'weight_decay': self.argv.l2[2]},
+            {'params': self.model.up_3.parameters(),
+             'weight_decay': self.argv.l2[1]},
+            {'params': self.model.up_4.parameters(),
+             'weight_decay': self.argv.l2[0]},
             {'params': [*self.model.z.parameters(),
                         *self.model.prob.parameters()]}
         ],
             lr=self.argv.lr,
-            weight_decay=self.argv.l2,
-            betas=(.99, .99))
+            weight_decay=0,
+            betas=(.99, .999))
 
         if self.argv.reload:
             opt.load_state_dict(self.checkpoint['optimizer_state'])
@@ -288,7 +291,6 @@ class Training:
 
     def __init_loaders__(self):
         training_loader = DataLoader(Buildings(validation=False,
-                                               aug_split=self.argv.augmentation,
                                                ratio=self.argv.balance_ratio),
                                      batch_size=self.argv.batch_size,
                                      num_workers=self.argv.num_workers,
@@ -371,7 +373,7 @@ class Training:
                 [_['TL'], _['TLpos'], _['TLneg'],
                 _['VL'], _['VLpos'], _['VLneg']]
             )
-            self.divisor += 1
+            self.denom += 1
 
         if _['VIOU'] > self.iou:
             self.iou = _['VIOU'].item()
@@ -380,7 +382,7 @@ class Training:
         
         if self.argv.report and (not epoch % self.report_rate
                                  or epoch == 1):
-            self.means /= self.divisor
+            self.means /= self.denom
             self.report['total_training_loss'].append(
                 self.means[0].item()
             )
@@ -400,7 +402,7 @@ class Training:
                 self.means[5].item()
             )
             self.means.zero_()
-            self.divisor = 0
+            self.denom = 0
 
     def __monitor_layers__(self, epoch):
 
