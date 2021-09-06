@@ -7,6 +7,7 @@ import os
 from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
+from torch.optim import optimizer
 from CLI_parser import parser
 from datetime import datetime
 
@@ -22,7 +23,7 @@ import torch
 logging.basicConfig(
     format='%(asctime)s %(name)s: %(message)s',
     level=logging.INFO,
-    datefmt='%b%d %H:%M:%S'
+    datefmt='%H:%M:%S %b%d'
 )
 
 log = logging.getLogger(__name__)
@@ -39,6 +40,10 @@ class Training:
         parser.description = type(self).__name__
         self.epoch = 1
         self.argv = parser.parse_args(argv)
+        if len(self.argv.l2) == 1:
+            self.argv.l2 *= 9
+        if len(self.argv.dropouts) == 1:
+            self.argv.dropouts *= 18
         self.report_rate = self.argv.report_rate or self.argv.epochs // 10
         self.check_rate = self.argv.check_rate or self.argv.epochs // 10
         if self.argv.reload:
@@ -47,7 +52,7 @@ class Training:
 
         self.model = self.__init_model__()
         self.loss_fn = CrossEntropyLoss(reduction='none',
-                                        weight=torch.tensor([1., 2.],
+                                        weight=torch.tensor(self.argv.weights,
                                                             device='cuda'))
         self.optimizer = self.__init_optimizer__()
         self.training_loader, self.validation_loader = self.__init_loaders__()
@@ -94,7 +99,8 @@ class Training:
         {group_1}
         {group_2}
         Dropouts: {[m[1].p for m in self.model.named_modules()
-        if 'dropout' in m[0]]}""",
+        if 'dropout' in m[0]]}
+        Decay: {[g['weight_decay'] for g in self.optimizer.param_groups]}""",
             fontsize=13)
 
         self.means = torch.zeros(6)
@@ -114,6 +120,8 @@ class Training:
     def _init_monitor_figures(self):
         os.makedirs("Monitoring/Activations", exist_ok=True)
         os.makedirs("Monitoring/Predictions", exist_ok=True)
+        os.makedirs("Monitoring/Gradients", exist_ok=True)
+        os.makedirs("Monitoring/Weights", exist_ok=True)
         self.t_monitor_idx = torch.randint(
             self.training_batches, (1,)
         )
@@ -122,11 +130,23 @@ class Training:
         )
         self.pred_fig, self.pred_axes = plt.subplots(2, 3, figsize=(15, 10))
         self.act_fig, self.act_axes = plt.subplots(3, 6, figsize=(15, 10))
+        self.grad_fig, self.grad_axes = plt.subplots(3, 6, figsize=(15, 10))
+        self.weight_fig, self.weight_axes = plt.subplots(3, 6, figsize=(15, 10))
         self.act_axes = self.act_axes.flatten()
+        self.grad_axes = self.grad_axes.flatten()
+        self.weight_axes = self.weight_axes.flatten()
+
+        self.__init_stats__()
 
         for ax in self.pred_axes.flat:
             ax.set_axis_off()
             ax.get_xaxis().set_visible(False)
+
+    def __init_stats__(self):
+        self.grad_stats = {n:torch.zeros(m.weight.shape)
+                           for n, m in self.model.named_modules() if 'conv' in n}
+        self.weight_stats = {}
+        self.stat_denom = 0
 
     def start(self):
         log.info(
@@ -139,7 +159,7 @@ class Training:
 
             if epoch == 1 or not epoch % self.check_rate:
                 # Register hooks to capture validation
-                # Hooks are removed on execution to preserve memory.
+                # Hooks are removed on execution to conserve memory.
                 # Repeat at next checkpoint
                 self.model._register_hooks_()
 
@@ -158,7 +178,8 @@ class Training:
                 log.info("  -- Monitoring Active: Saving sample image --")
                 self.pred_fig.savefig('Monitoring/Predictions/results_epoch_%d.png'
                                       % epoch)
-                self.__monitor_layers__(epoch)
+                self.__monitor_activations__(epoch)
+                self.__monitor_weights__(epoch)
 
             # Feed loss to scheduler
             self.scheduler.step(training_metrics[-1].mean())
@@ -179,6 +200,11 @@ class Training:
             z, a = self.model(X)
             loss, _loss = self.__compute_loss__(z, Y)
             loss.backward()
+            
+            # Monitor average gradient size per layer
+            if self.argv.monitor:
+                self.__gradient_stats__()
+
             self.optimizer.step()
             self._compute_metrics_(i, a, Y, _loss, metrics, training_loader)
             if all([self.argv.monitor and i == self.t_monitor_idx,
@@ -188,6 +214,7 @@ class Training:
                                         Y=Y.cpu().detach().numpy(),
                                         a=a.cpu().detach().numpy(),
                                         mode=0)
+        self.__monitor_gradients__(epoch)
         return metrics.to('cpu')
 
     def __validate_epoch__(self, epoch, validation_loader):
@@ -258,13 +285,13 @@ class Training:
             {'params': self.model.down_5.parameters(),
              'weight_decay': self.argv.l2[4]},
             {'params': self.model.up_1.parameters(),
-             'weight_decay': self.argv.l2[3]},
+             'weight_decay': self.argv.l2[5]},
             {'params': self.model.up_2.parameters(),
-             'weight_decay': self.argv.l2[2]},
+             'weight_decay': self.argv.l2[6]},
             {'params': self.model.up_3.parameters(),
-             'weight_decay': self.argv.l2[1]},
+             'weight_decay': self.argv.l2[7]},
             {'params': self.model.up_4.parameters(),
-             'weight_decay': self.argv.l2[0]},
+             'weight_decay': self.argv.l2[8]},
             {'params': [*self.model.z.parameters(),
                         *self.model.prob.parameters()]}
         ],
@@ -283,9 +310,9 @@ class Training:
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer,
                                                               'min',
                                                               0.5,
-                                                              patience=10,
+                                                              patience=30,
                                                               verbose=True,
-                                                              min_lr=5e-8)
+                                                              min_lr=1e-6)
         if self.argv.reload:
             self.scheduler.load_state_dict(self.checkpoint['scheduler_state'])
 
@@ -308,7 +335,7 @@ class Training:
 
         if self.report_rate:
             # Index a sample to register active augmentations
-            # To use for report figure title
+            # To use for the report figure title
             training_loader.dataset[0]
 
         return training_loader, validation_loader
@@ -404,43 +431,62 @@ class Training:
             self.means.zero_()
             self.denom = 0
 
-    def __monitor_layers__(self, epoch):
+    def __monitor_activations__(self, epoch):
 
         self.act_axes = self.act_axes.flatten()
         self.act_fig.suptitle("Epoch %d" % epoch)
 
         for i, (name, activation) in enumerate(self.model.activations.items()):
             self.act_axes[i].set_title(name)
-            hist = np.array(
-                list(
-                    map(
-                        lambda x: np.histogram(x, bins=20)[0],
-                        # Reshape the batch sample to features * values
-                        # Get histogram for each feature
-                        activation[0].reshape(activation[0].size(0), -1)
-                    )
-                )
-            )
-
-            # Normalize each row for full brightness
-            hist = hist / np.expand_dims(hist.max(-1), 1)
-            self.act_axes[i].imshow(hist, aspect='auto', cmap='Reds')
-
-            # bins = np.array(
-            #     list(
-            #         map(
-            #             lambda x: np.histogram(x, bins=20)[1],
-            #             activation[0].reshape(activation.size(1), -1)
-            #         )
-            #     )
-            # )
+            self.act_axes[i].barh(torch.arange(activation[0].size(0)),
+                                  activation[0].norm(2, (-1, -2)),
+                                  1,
+                                  color='r')
 
         self.act_fig.tight_layout()
-        self.act_fig.savefig("Monitoring/Activations/%d.png" % epoch)
+        self.act_fig.savefig("Monitoring/Activations/Activations_%d.png" % epoch)
 
         self.model.activations = {}
 
         for ax in self.act_axes:
+            ax.clear()
+
+    def __gradient_stats__(self):
+        """
+        Keep track of gradients
+        """
+        with torch.no_grad():
+            for n, m in self.model.named_modules():
+                if 'conv' in n:
+                    self.grad_stats[n] += m.weight.grad.cpu()
+        self.stat_denom += 1
+
+    def __monitor_gradients__(self, epoch):
+        if self.argv.monitor and (epoch == 1 or not epoch % self.check_rate):
+            for i, (key, item) in enumerate(self.grad_stats.items()):
+                item /= self.stat_denom
+                self.grad_axes[i].set_title(key)
+                self.grad_axes[i].barh(torch.arange(item.size(0)),
+                                       item.norm(2, (-1, -2, -3)), 1, color='orange')
+            self.grad_fig.tight_layout()
+            self.grad_fig.savefig("Monitoring/Gradients/Gradients_%d.png" % epoch)
+
+            self.__init_stats__()
+            for ax in self.grad_axes:
+                ax.clear()
+
+    def __monitor_weights__(self, epoch):
+        i = 0
+        for n, m in self.model.named_modules():
+            if 'conv' in n:
+                self.weight_axes[i].set_title(n)
+                self.weight_axes[i].barh(torch.arange(m.weight.size(0)),
+                                         m.weight.detach().cpu().norm(2, (-1, -2, -3)), 1)
+                i += 1
+        self.weight_fig.tight_layout()
+        self.weight_fig.savefig("Monitoring/Weights/Weights_%d.png" % epoch)
+
+        for ax in self.weight_axes:
             ax.clear()
 
     def __monitor_sample__(self, **parameters):

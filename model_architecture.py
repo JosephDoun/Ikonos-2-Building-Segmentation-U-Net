@@ -13,30 +13,29 @@ class BuildingsModel(nn.Module):
                  dropouts: List):
         super().__init__()
         self.hooks = {}
-        self.batchnorm = nn.BatchNorm2d(in_channels)
         self.down_1 = DownSamplingBlock(in_channels, init_out_factor,
-                                        dropout=(dropouts[0], dropouts[0]))
+                                        dropout=(dropouts[0], dropouts[1]))
         self.down_2 = DownSamplingBlock(self.down_1.conv2.out_channels, 2,
-                                        dropout=(dropouts[1], dropouts[1]))
+                                        dropout=(dropouts[2], dropouts[3]))
         self.down_3 = DownSamplingBlock(self.down_2.conv2.out_channels, 2,
-                                        dropout=(dropouts[2], dropouts[2]))
+                                        dropout=(dropouts[4], dropouts[5]))
         self.down_4 = DownSamplingBlock(self.down_3.conv2.out_channels, 2,
-                                        dropout=(dropouts[3], dropouts[3]))
+                                        dropout=(dropouts[6], dropouts[7]))
         self.down_5 = DownSamplingBlock(self.down_4.conv2.out_channels, 2,
                                         max_pooling=False,
-                                        dropout=(dropouts[4], dropouts[4]))
+                                        dropout=(dropouts[8], dropouts[9]))
         self.up_1 = UpSamplingBlock(self.down_5.conv2.out_channels, 2,
                                     skip_channels=self.down_4.conv2.out_channels,
-                                    dropout=(dropouts[3], dropouts[3]))
+                                    dropout=(dropouts[10], dropouts[11]))
         self.up_2 = UpSamplingBlock(self.up_1.conv2.out_channels, 2,
                                     skip_channels=self.down_3.conv2.out_channels,
-                                    dropout=(dropouts[2], dropouts[2]))
+                                    dropout=(dropouts[12], dropouts[13]))
         self.up_3 = UpSamplingBlock(self.up_2.conv2.out_channels, 2,
                                     skip_channels=self.down_2.conv2.out_channels,
-                                    dropout=(dropouts[1], dropouts[1]))
+                                    dropout=(dropouts[14], dropouts[15]))
         self.up_4 = UpSamplingBlock(self.up_3.conv2.out_channels, 2,
                                     skip_channels=self.down_1.conv2.out_channels,
-                                    dropout=(dropouts[0], dropouts[0]))
+                                    dropout=(dropouts[16], dropouts[17]))
         self.z = nn.Conv2d(self.up_4.conv2.out_channels,
                            out_channels=2,
                            kernel_size=1)
@@ -74,7 +73,6 @@ class BuildingsModel(nn.Module):
                 self.hooks[n] = m.register_forward_hook(get_activation(n))
     
     def forward(self, x):
-        x = self.batchnorm(x)
         x, skip_connection_4 = self.down_1(x)
         x, skip_connection_3 = self.down_2(x)
         x, skip_connection_2 = self.down_3(x)

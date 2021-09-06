@@ -19,7 +19,7 @@ from sys import argv
 logging.basicConfig(
     format='%(asctime)s %(levelname)s:%(name)s: %(message)s',
     level=logging.DEBUG,
-    datefmt='%b%d %H:%M:%S'
+    datefmt='%H:%M:%S %b%d'
 )
 
 log = logging.getLogger(argv[0])
@@ -53,7 +53,7 @@ if __name__ == '__main__':
 
 def to_tiles(X, Y, tile_size=512):
     log.info(f"Splitting tif image to tiles... {tile_size} x {tile_size}")
-    if X.ndim == 3 and tile_size == 512:
+    if X.ndim == 3 and X.shape[-1] != tile_size:
         # Pad X to be divisible by tile size
         X = np.pad(X, ((0, 0),
                        (0, tile_size - X.shape[-2] % tile_size),
@@ -61,7 +61,7 @@ def to_tiles(X, Y, tile_size=512):
                    constant_values=0)
 
         channel_axis = X.shape.index(min(X.shape))
-        assert channel_axis == 0, "channel axis is not -3"
+        assert channel_axis == 0, "channel axis is not at position -3"
 
         # Move channels axis to the end for convenience
         X = np.moveaxis(X, channel_axis, -1)
@@ -78,8 +78,8 @@ def to_tiles(X, Y, tile_size=512):
         X = np.moveaxis(X, -1, 1)
 
         # Pad Y to be divisible by tile size
-        Y = np.pad(Y, ((0, tile_size - Y.shape[0] % tile_size),
-                       (0, tile_size - Y.shape[1] % tile_size)),
+        Y = np.pad(Y, ((0, tile_size - Y.shape[-2] % tile_size),
+                       (0, tile_size - Y.shape[-1] % tile_size)),
                    constant_values=0)
 
         arr_height, arr_width = Y.shape
@@ -90,8 +90,7 @@ def to_tiles(X, Y, tile_size=512):
         Y = Y.swapaxes(1, 2).reshape(-1,
                                      tile_size,
                                      tile_size)
-
-    elif X.ndim == 4:
+    elif X.ndim == 4 and X.shape[-1] != tile_size:
         X = np.pad(X, ((0, 0),
                        (0, 0),
                        (0, tile_size - X.shape[-2] % tile_size),
@@ -125,6 +124,7 @@ def to_tiles(X, Y, tile_size=512):
         Y = Y.swapaxes(2, 3).reshape(-1,
                                      tile_size,
                                      tile_size)
+    assert X.shape[0] == Y.shape[0], 'There was a padding error. A dimension was not padded. Resize input slightly.'
     return X, Y
 
 
@@ -135,8 +135,6 @@ def clean_tiles(X, Y):
     log.info(
         "Cleaning up no-data tiles"
     )
-
-    # idx = X.mean((-3, -2, -1)) >= 0.05
     idx = (X != 0).mean((-3, -2, -1)) > 0.20
     X = X[idx]
     Y = Y[idx]
@@ -172,38 +170,59 @@ def make_training_hdf5(train_tiles=512, val_tiles=512):
 
         X_tiles, Y_tiles = to_tiles(X, Y, tile_size=val_tiles)
         X_tiles, Y_tiles = clean_tiles(X_tiles, Y_tiles)
-
+        X_pos, Y_pos, X_neg, Y_neg = separate_labels(X_tiles, Y_tiles)
+        
         with h5py.File(name='Training/training_data.hdf5', mode='a') as f:
             training_x = f.require_group('training/X')
             training_y = f.require_group('training/Y')
 
-            idx = np.random.permutation(len(X_tiles))
-            val_samples = int(len(idx) * args.validation_split) or 1
+            # idx = np.random.permutation(len(X_tiles))
+            pos_idx = np.random.permutation(len(X_pos))
+            neg_idx = np.random.permutation(len(X_neg))
+            val_pos_samples = int(len(pos_idx) * args.validation_split) + 1
+            val_neg_samples = int(len(neg_idx) * args.validation_split) + 1
+            # val_samples = int(len(idx) * args.validation_split) + 1
 
-            X_train = X_tiles[idx[val_samples:]]
-            Y_train = Y_tiles[idx[val_samples:]]
-            X_train, Y_train = to_tiles(
-                X_train, Y_train, tile_size=train_tiles
-            )
-            X_train, Y_train = clean_tiles(X_train, Y_train)
-            X_train_pos, Y_train_pos, X_train_neg, Y_train_neg = \
-                separate_labels(X_train, Y_train)
+        
+            X_train_pos = X_pos[pos_idx[val_pos_samples:]]
+            Y_train_pos = Y_pos[pos_idx[val_pos_samples:]]
+            X_train_neg = X_tiles[neg_idx[val_neg_samples:]]
+            Y_train_neg = Y_tiles[neg_idx[val_neg_samples:]]
+
+            X_valid_pos = X_pos[pos_idx[:val_pos_samples]]
+            Y_valid_pos = Y_pos[pos_idx[:val_pos_samples]]
+            X_valid_neg = X_neg[neg_idx[:val_neg_samples]]
+            Y_valid_neg = Y_neg[neg_idx[:val_neg_samples]]
+
+            if train_tiles != val_tiles:
+                X_train, Y_train = to_tiles(
+                    X_train, Y_train, tile_size=train_tiles
+                )
+                X_train, Y_train = clean_tiles(X_train, Y_train)
+
+            # X_train_pos, Y_train_pos, X_train_neg, Y_train_neg = \
+            #     separate_labels(X_train, Y_train)
 
             X_train_pos, Y_train_pos = clean_tiles(X_train_pos, Y_train_pos)
             X_train_neg, Y_train_neg = clean_tiles(X_train_neg, Y_train_neg)
+            X_valid_pos, Y_valid_pos = clean_tiles(X_valid_pos, Y_valid_pos)
+            X_valid_neg, Y_valid_neg = clean_tiles(X_valid_neg, Y_valid_neg)
+            
+            X_valid = np.concatenate([X_valid_pos, X_valid_neg], 0)
+            Y_valid = np.concatenate([Y_valid_pos, Y_valid_neg], 0)
+            # if val_pos_samples:
 
-            if val_samples:
-                X_valid = X_tiles[idx[:val_samples]]
-                Y_valid = Y_tiles[idx[:val_samples]]
-            else:
-                X_valid = 0
-                Y_valid = 0
+            # else:
+            #     X_valid = 0
+            #     Y_valid = 0
 
             def expand(dataset, data, label: bool):
                 """
                 dataset: h5py dataset instance for expansion
                 data: data to fit in dataset
                 label: flag to assume dataset & data dimensions
+                        <false> NOT a label: <X>
+                        <true> a label: <Y>
                 """
                 log.info("Expanding HDF5 file...")
                 if not label:
@@ -227,6 +246,8 @@ def make_training_hdf5(train_tiles=512, val_tiles=512):
                         )
                     )
                     dataset[dataset_shape[0]:] = data
+                return
+
 
             assert X_train_pos.shape[0] == Y_train_pos.shape[0]
             assert X_train_neg.shape[0] == Y_train_neg.shape[0]
@@ -282,10 +303,9 @@ def make_training_hdf5(train_tiles=512, val_tiles=512):
                                                                  train_tiles),
                                                        data=Y_train_neg)
 
-            if val_samples:
+            if val_pos_samples or val_neg_samples:
 
                 validation = f.require_group("validation")
-
                 try:
                     _X = validation['X']
                     _Y = validation['Y']
@@ -323,6 +343,7 @@ def make_training_hdf5(train_tiles=512, val_tiles=512):
             Validation samples: {f['validation/X'].len()} of size {val_tiles} x {val_tiles}
             """
         )
+    return
 
 
 class Buildings(Dataset):
@@ -366,7 +387,8 @@ class Buildings(Dataset):
             return img
         factor = torch.rand(1) * r + m
         mean = img.mean((-3, -2, -1), keepdim=True)
-        return (factor * img + (1 - factor) * mean).clamp(0, 1)
+        img = (factor * img + (1 - factor) * mean)
+        return img / img.max()
 
     @log_augmentation
     def _adjust_brightness_(self, img: Tensor, r: float, m: float):
@@ -383,18 +405,18 @@ class Buildings(Dataset):
         return img*factor.clamp(0, 1)
 
     @log_augmentation
-    def _affine_(self, img: List[Tensor], sh: bool = False):
+    def _affine_(self, img: List[Tensor], sc=(0, 0), r=(360, 180), t=(0.2, 0.2), sh=(60, 30)):
         """
         :param sh: Whether to use shear in the affine transformation
         """
         if self.validation:
             return img[0], img[1]
 
-        degrees = torch.rand(1).item() * 360 - 180
-        translations = [int(img[0].shape[-2] * .2 * torch.rand(1)),
-                        int(img[0].shape[-1] * .2 * torch.rand(1))]
-        scale = torch.rand(1) * .6 + .7
-        shear = sh * (torch.rand(1).item() * 60 - 30)
+        degrees = torch.rand(1).item() * r[0] - r[1]
+        translations = [int(img[0].shape[-2] * t[0] * torch.rand(1)),
+                        int(img[0].shape[-1] * t[1] * torch.rand(1))]
+        scale = torch.rand(1) * sc[0] + sc[1] or 1
+        shear = torch.rand(1).item() * sh[0] - sh[1]
 
         img[0] = F.affine(img[0], angle=degrees,
                           translate=translations,
@@ -429,7 +451,7 @@ class Buildings(Dataset):
     def _elastic_deformation_(self, img: List[Tensor],
                               k: int,
                               sigma: float,
-                              alpha: int):
+                              alpha: float):
         if self.validation:
             return img
         """
@@ -447,6 +469,11 @@ class Buildings(Dataset):
         :param sigma: std deviation to use for gaussian distribution
         :param alpha: displacement intensity
         """
+        # params = (
+        #     (3, 10, 0.02),
+        #     (5, 10, 0.04),
+        # )
+        # k, sigma, alpha = params[torch.randint(len(params), (1,))]
         delta = F.gaussian_blur(
             2 * torch.rand(1, 2, img[0].size(-2), img[0].size(-1)) - 1,
             kernel_size=k,
@@ -462,19 +489,19 @@ class Buildings(Dataset):
         img[0] = nn_F.grid_sample(img[0].unsqueeze(0),
                                   eye_grid,
                                   align_corners=True,
-                                  mode='bicubic',
+                                  mode='nearest',
                                   padding_mode='reflection').squeeze(0)
 
         img[1] = nn_F.grid_sample(img[1].float().reshape(1, 1, *img[1].shape),
                                   eye_grid,
                                   align_corners=True,
-                                  mode='bicubic',
+                                  mode='nearest',
                                   padding_mode='reflection').reshape(img[1].shape)
-        img[1][img[1] > 0.5] = 1
+        # img[1][img[1] > 0.5] = 1
         return img[0].clamp(0, 1), img[1]
 
     @log_augmentation
-    def _random_crop_(self, img: List[Tensor], size: Tuple[int]):
+    def _random_crop_(self, img: List[Tensor], size: int):
         if self.validation:
             return img
         top = torch.randint(img[0].shape[-2] - size, (1,))
@@ -488,7 +515,7 @@ class Buildings(Dataset):
         if self.validation:
             length = self.X_val.len()
         else:
-            length = self.ratio*self.X_train_neg.len()
+            length = np.abs(self.ratio)*self.X_train_neg.len()
         return length
 
     def __getitem__(self, index):
@@ -496,26 +523,42 @@ class Buildings(Dataset):
         Retrieve sample
 
         Training class:
-            Even index:
-                Return positive sample
-            Odd index:
+            Index multiple of <ratio>:
                 Return negative sample
+            Otherwise:
+                Return positive sample
+
+            :REVERSE FOR NEGATIVE RATIO:
 
         Validation class:
             Iterate over samples normally
 
         """
         if not self.validation:
-            ratio = self.ratio
-            if index % ratio:
-                features = self.X_train_pos
-                labels = self.Y_train_pos
-                idx = index - 1 - index // ratio
-                idx %= len(features)
-            elif not index % ratio:
-                features = self.X_train_neg
-                labels = self.Y_train_neg
-                idx = index // ratio
+            ratio = self.ratio * (np.abs(self.ratio) != 1) or 2
+            if ratio > 0:
+                if index % ratio:
+                    features = self.X_train_pos
+                    labels = self.Y_train_pos
+                    idx = index - 1 - index // ratio
+                    idx %= len(features)
+                elif not index % ratio:
+                    features = self.X_train_neg
+                    labels = self.Y_train_neg
+                    idx = index // ratio
+                    idx %= len(features)
+            elif ratio < 0:
+                ratio = np.abs(ratio)
+                if index % ratio:
+                    features = self.X_train_neg
+                    labels = self.Y_train_neg
+                    idx = index - 1 - index // ratio
+                    idx %= len(features)
+                elif not index % ratio:
+                    features = self.X_train_pos
+                    labels = self.Y_train_pos
+                    idx = index // ratio
+                    idx %= len(features)
         elif self.validation:
             idx = index
             features = self.X_val
@@ -524,16 +567,18 @@ class Buildings(Dataset):
         image, label = (torch.from_numpy(features[idx]),
                         torch.from_numpy(labels[idx]))
 
-        # image, label = self._random_crop_([image, label], (64, 64))
+        # image, label = self._random_crop_([image, label], 256)
         image, label = self._random_flip_([image, label])
-        image = self._noise_(image, f=0.01)
-        image = self._adjust_contrast_(image, r=.3, m=.85)
-        image = self._adjust_brightness_(image, r=.3, m=.85)
+        image = self._noise_(image, f=0.02)
+        image = self._adjust_contrast_(image, r=0.4, m=.8)
+        image = self._adjust_brightness_(image, r=0.2, m=.9)
         image, label = self._elastic_deformation_([image, label],
-                                                  k=5,
-                                                  sigma=5.,
-                                                  alpha=.25)
-        image, label = self._affine_([image, label.unsqueeze(0)], sh=True)
+                                                  k=3,
+                                                  sigma=10.,
+                                                  alpha=0.02)
+        image, label = self._affine_([image, label.unsqueeze(0)],
+                                     sh=(0, 0), sc=(1.2, 0.5),
+                                     t=(0.2, 0.2), r=(360, 180))
         return image, label.to(torch.long).squeeze(0)
 
     def _augment_(self, img: List[Tensor]):

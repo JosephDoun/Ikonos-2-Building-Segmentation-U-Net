@@ -36,7 +36,7 @@ parser.add_argument("--monitor", "-m",
                     action='store_const')
 parser.add_argument("--l2",
                     help='L2 Regularization parameters. Sequence of length 5. Applied like dropouts.',
-                    default=[0.]*5,
+                    default=[0.]*9,
                     type=float,
                     nargs='+')
 parser.add_argument("--reload",
@@ -68,12 +68,17 @@ parser.add_argument("--report-rate",
                     Default: EPOCHS // 10
                     """)
 parser.add_argument('--dropouts', '-d', type=float,
-                    nargs='+', default=[0.]*5,
+                    nargs='+', default=[0.]*18,
                     help='Sequence of length 5. Dropout probabilities for each NN block (positions 0-4). Applied symmetrically.')
+parser.add_argument('--weights', '-w',
+                    type=float,
+                    nargs='+',
+                    default=[1., 1.],
+                    help='Class weights for loss computation. Sequence of length <classes>')
 parser.add_argument("--check-rate",
                     type=int,
                     default=0,
                     help="""
-                    Make checkpoint every n epochs - For Monitor/Checkpoint.
+                    Make checkpoint every n epochs - For Monitor/Checkpoint options.
                     Default: EPOCHS // 10
                     """)
