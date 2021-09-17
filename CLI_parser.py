@@ -36,7 +36,7 @@ parser.add_argument("--monitor", "-m",
                     action='store_const')
 parser.add_argument("--l2",
                     help='L2 Regularization parameters. Sequence of length 5. Applied like dropouts.',
-                    default=[0.]*9,
+                    default=[0.]*23,
                     type=float,
                     nargs='+')
 parser.add_argument("--reload",
@@ -68,7 +68,7 @@ parser.add_argument("--report-rate",
                     Default: EPOCHS // 10
                     """)
 parser.add_argument('--dropouts', '-d', type=float,
-                    nargs='+', default=[0.]*18,
+                    nargs='+', default=[0.]*23,
                     help='Sequence of length 5. Dropout probabilities for each NN block (positions 0-4). Applied symmetrically.')
 parser.add_argument('--weights', '-w',
                     type=float,

@@ -195,10 +195,15 @@ def make_training_hdf5(train_tiles=512, val_tiles=512):
             Y_valid_neg = Y_neg[neg_idx[:val_neg_samples]]
 
             if train_tiles != val_tiles:
-                X_train, Y_train = to_tiles(
-                    X_train, Y_train, tile_size=train_tiles
+                X_train_pos, Y_train_pos = to_tiles(
+                    X_train_pos, Y_train_pos, tile_size=train_tiles
                 )
-                X_train, Y_train = clean_tiles(X_train, Y_train)
+                X_train_pos, Y_train_pos = clean_tiles(X_train_pos, Y_train_pos)
+
+                X_train_neg, Y_train_neg = to_tiles(
+                    X_train_neg, Y_train_neg, tile_size=train_tiles
+                )
+                X_train_neg, Y_train_neg = clean_tiles(X_train_neg, Y_train_neg)
 
             # X_train_pos, Y_train_pos, X_train_neg, Y_train_neg = \
             #     separate_labels(X_train, Y_train)
@@ -570,14 +575,14 @@ class Buildings(Dataset):
         # image, label = self._random_crop_([image, label], 256)
         image, label = self._random_flip_([image, label])
         image = self._noise_(image, f=0.02)
-        image = self._adjust_contrast_(image, r=0.4, m=.8)
+        image = self._adjust_contrast_(image, r=.4, m=.8)
         image = self._adjust_brightness_(image, r=0.2, m=.9)
         image, label = self._elastic_deformation_([image, label],
                                                   k=3,
                                                   sigma=10.,
                                                   alpha=0.02)
         image, label = self._affine_([image, label.unsqueeze(0)],
-                                     sh=(0, 0), sc=(1.2, 0.5),
+                                     sh=(30, 15), sc=(.75, 0.75),
                                      t=(0.2, 0.2), r=(360, 180))
         return image, label.to(torch.long).squeeze(0)
 

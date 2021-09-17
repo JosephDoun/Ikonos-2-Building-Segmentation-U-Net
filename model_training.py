@@ -41,9 +41,9 @@ class Training:
         self.epoch = 1
         self.argv = parser.parse_args(argv)
         if len(self.argv.l2) == 1:
-            self.argv.l2 *= 9
+            self.argv.l2 *= 23
         if len(self.argv.dropouts) == 1:
-            self.argv.dropouts *= 18
+            self.argv.dropouts *= 23
         self.report_rate = self.argv.report_rate or self.argv.epochs // 10
         self.check_rate = self.argv.check_rate or self.argv.epochs // 10
         if self.argv.reload:
@@ -130,8 +130,8 @@ class Training:
         )
         self.pred_fig, self.pred_axes = plt.subplots(2, 3, figsize=(15, 10))
         self.act_fig, self.act_axes = plt.subplots(3, 6, figsize=(15, 10))
-        self.grad_fig, self.grad_axes = plt.subplots(3, 6, figsize=(15, 10))
-        self.weight_fig, self.weight_axes = plt.subplots(3, 6, figsize=(15, 10))
+        self.grad_fig, self.grad_axes = plt.subplots(4, 6, figsize=(15, 10))
+        self.weight_fig, self.weight_axes = plt.subplots(4, 6, figsize=(15, 10))
         self.act_axes = self.act_axes.flatten()
         self.grad_axes = self.grad_axes.flatten()
         self.weight_axes = self.weight_axes.flatten()
@@ -144,7 +144,7 @@ class Training:
 
     def __init_stats__(self):
         self.grad_stats = {n:torch.zeros(m.weight.shape)
-                           for n, m in self.model.named_modules() if 'conv' in n}
+                           for n, m in self.model.named_modules() if 'conv' in n or 'transpose' in n}
         self.weight_stats = {}
         self.stat_denom = 0
 
@@ -273,27 +273,13 @@ class Training:
         """
         Isolating each block for more control
         """
+        self.argv.l2 = iter(self.argv.l2)
         opt = optim.Adam([
-            {'params': self.model.down_1.parameters(),
-             'weight_decay': self.argv.l2[0]},
-            {'params': self.model.down_2.parameters(),
-             'weight_decay': self.argv.l2[1]},
-            {'params': self.model.down_3.parameters(),
-             'weight_decay': self.argv.l2[2]},
-            {'params': self.model.down_4.parameters(),
-             'weight_decay': self.argv.l2[3]},
-            {'params': self.model.down_5.parameters(),
-             'weight_decay': self.argv.l2[4]},
-            {'params': self.model.up_1.parameters(),
-             'weight_decay': self.argv.l2[5]},
-            {'params': self.model.up_2.parameters(),
-             'weight_decay': self.argv.l2[6]},
-            {'params': self.model.up_3.parameters(),
-             'weight_decay': self.argv.l2[7]},
-            {'params': self.model.up_4.parameters(),
-             'weight_decay': self.argv.l2[8]},
-            {'params': [*self.model.z.parameters(),
-                        *self.model.prob.parameters()]}
+
+            {'params': m.parameters(),
+             'weight_decay': self.argv.l2.__next__()} for (n, m) in self.model.named_modules()
+             if 'conv' in n
+            
         ],
             lr=self.argv.lr,
             weight_decay=0,
@@ -457,7 +443,7 @@ class Training:
         """
         with torch.no_grad():
             for n, m in self.model.named_modules():
-                if 'conv' in n:
+                if 'conv' in n or 'transpose' in n:
                     self.grad_stats[n] += m.weight.grad.cpu()
         self.stat_denom += 1
 
@@ -478,7 +464,7 @@ class Training:
     def __monitor_weights__(self, epoch):
         i = 0
         for n, m in self.model.named_modules():
-            if 'conv' in n:
+            if 'conv' in n or 'transpose' in n:
                 self.weight_axes[i].set_title(n)
                 self.weight_axes[i].barh(torch.arange(m.weight.size(0)),
                                          m.weight.detach().cpu().norm(2, (-1, -2, -3)), 1)
