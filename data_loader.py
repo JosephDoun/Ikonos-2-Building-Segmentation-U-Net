@@ -520,7 +520,7 @@ class Buildings(Dataset):
         if self.validation:
             length = self.X_val.len()
         else:
-            length = np.abs(self.ratio)*self.X_train_neg.len()
+            length = np.abs(self.ratio)*max(self.X_train_neg.len(), self.X_train_pos.len())*5
         return length
 
     def __getitem__(self, index):
