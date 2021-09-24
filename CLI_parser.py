@@ -79,6 +79,6 @@ parser.add_argument("--check-rate",
                     type=int,
                     default=0,
                     help="""
-                    Make checkpoint every n epochs - For Monitor/Checkpoint options.
+                    Write checkpoint every n epochs - For Monitor/Checkpoint options.
                     Default: EPOCHS // 10
                     """)
