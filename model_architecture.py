@@ -72,7 +72,21 @@ class BuildingsModel(nn.Module):
             if type(m) == nn.ReLU:
                 self.hooks[n] = m.register_forward_hook(get_activation(n))
 
+    def _register_hooks_(self):
+        self.activations = {}
+        
+        def get_activation(name):
+            def hook(model, input, output):
+                self.activations[name] = output.cpu().detach()
+                self.hooks[name].remove()
+            return hook
+        
+        for n, m in self.named_modules():
+            if type(m) == nn.ReLU:
+                self.hooks[n] = m.register_forward_hook(get_activation(n))
+    
     def forward(self, x):
+        x = self.batchnorm(x)
         x, skip_connection_4 = self.down_1(x)
         x, skip_connection_3 = self.down_2(x)
         x, skip_connection_2 = self.down_3(x)
