@@ -38,7 +38,7 @@
                 <li>Initial training phase includes samples from 10 sub-areas of an image taken at the greater Thessaloniki Region, Greece, taken in Spring. This phase aims to give initial performance evaluations and generalization capabilities on images of different distributions (e.g. acquired in other seasons), before the dataset distribution can be expanded. <br>
                 <div align='center'>
                     <img align='center' src='./imgdir/training_areas.png' alt='Training areas' style='float:center;' height=80%><br>
-                    <footer>Training areas Image: &copy; DigitalGlobe, edited </footer>
+                    <footer><i>Training areas Image by &copy; DigitalGlobe, processed</i></footer>
                 </div>
                 </li>
                 <li>Sample areas were delineated in QGIS and samples were collected similarly from industrial and urban environments. Further samples were taken from irregular background areas. Extracted rasters were processed further into normalized tiles, separated in positive and negative samples and stored in hdf5 format. About 1/6 of each sub-area was kept for validation.</li>
@@ -99,7 +99,7 @@
                         </li>
                         <div align='center'>
                             <img src="imgdir/results_epoch_300.png" align='center'>
-                            <footer>Examples of augmented training sample and validation sample at 300th epoch.</footer>
+                            <footer><i>Image: Examples of augmented training sample and validation sample at 300th epoch.</i></footer>
                         </div>
                     </ol>
                 </li>
@@ -178,7 +178,7 @@ optional arguments:
             <h2>3. Training Results</h2>
                     <div align='center'>
                         <img src="Reports/Report.png" width=80% align='center'><br>
-                        <footer>Latest Successful Experiment -- Model training visualization</footer>
+                        <footer><i>Latest Successful Experiment -- Model training visualization</i></footer>
                     </div>
             </ul>
         </div>
@@ -192,7 +192,7 @@ optional arguments:
             </p>
             <div align='center'>
                 <img src='imgdir/test_areas.png' align='center'><br>
-                <footer>Test areas, Image: &copy; DigitalGlobe, edited </footer>
+                <footer><i>Test areas, Image: &copy; DigitalGlobe, processed</i></footer>
             </div>
                 <ul>
                     <li>
