@@ -38,7 +38,7 @@
                 <li>Initial training phase includes samples from 10 sub-areas of an image taken at the greater Thessaloniki Region, Greece, taken in Spring. This phase aims to give initial performance evaluations and generalization capabilities on images of different distributions (e.g. acquired in other seasons), before the dataset distribution can be expanded. <br>
                 <div align='center'>
                     <img align='center' src='./imgdir/training_areas.png' alt='Training areas' style='float:center;' height=80%><br>
-                    <footer>Training areas &copy DigitalGlobe </footer>
+                    <footer>Training areas Image: &copy; DigitalGlobe, edited </footer>
                 </div>
                 </li>
                 <li>Sample areas were delineated in QGIS and samples were collected similarly from industrial and urban environments. Further samples were taken from irregular background areas. Extracted rasters were processed further into normalized tiles, separated in positive and negative samples and stored in hdf5 format. About 1/6 of each sub-area was kept for validation.</li>
@@ -190,7 +190,7 @@ optional arguments:
             </p>
             <div align='center'>
                 <img src='imgdir/test_areas.png' align='center'><br>
-                <footer>Test areas &copy DigitalGlobe </footer>
+                <footer>Test areas, Image: &copy; DigitalGlobe, edited </footer>
             </div>
                 <ul>
                     <li>
