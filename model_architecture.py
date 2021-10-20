@@ -10,7 +10,7 @@ class BuildingsModel(nn.Module):
 
     def __init__(self, in_channels: int,
                  init_out_factor: int,
-                 dropouts: List):
+                 dropouts: List=[0]*23):
         super().__init__()
         self.hooks = {}
         self.down_1 = DownSamplingBlock(in_channels, init_out_factor,
@@ -45,48 +45,34 @@ class BuildingsModel(nn.Module):
     def __init_weights__(self):
         for m in self.modules():
             if type(m) in {nn.Conv2d, nn.ConvTranspose2d}:
-                fan_in, fan_out = \
-                    nn.init._calculate_fan_in_and_fan_out(m.weight.data)
-                std = np.sqrt(2 / fan_in)
+                # fan_in, fan_out = \
+                #     nn.init._calculate_fan_in_and_fan_out(m.weight.data)
+                # std = np.sqrt(2 / fan_in)
                 # nn.init.normal_(m.weight.data, 0, std)
                 nn.init.kaiming_normal_(m.weight.data,
                                         mode='fan_in',
                                         nonlinearity='relu')
                 if m.bias is not None:
-                    fan_in, fan_out = \
-                        nn.init._calculate_fan_in_and_fan_out(m.weight.data)
-                    std = 1 / np.sqrt(fan_in)
+                    # fan_in, fan_out = \
+                    #     nn.init._calculate_fan_in_and_fan_out(m.weight.data)
+                    # std = 1 / np.sqrt(fan_in)
                     # nn.init.normal_(m.bias, 0, std)
                     m.bias.data.fill_(0)
 
-    def _register_hooks_(self):
-        self.activations = {}
-
-        def get_activation(name):
-            def hook(model, input, output):
-                self.activations[name] = output.cpu().detach()
-                self.hooks[name].remove()
-            return hook
-
-        for n, m in self.named_modules():
-            if type(m) == nn.ReLU:
-                self.hooks[n] = m.register_forward_hook(get_activation(n))
-
-    def _register_hooks_(self):
-        self.activations = {}
+    # def _register_hooks_(self):
+    #     self.activations = {}
         
-        def get_activation(name):
-            def hook(model, input, output):
-                self.activations[name] = output.cpu().detach()
-                self.hooks[name].remove()
-            return hook
+    #     def get_activation(name):
+    #         def hook(model, input, output):
+    #             self.activations[name] = output.cpu().detach()
+    #             self.hooks[name].remove()
+    #         return hook
         
-        for n, m in self.named_modules():
-            if type(m) == nn.ReLU:
-                self.hooks[n] = m.register_forward_hook(get_activation(n))
+    #     for n, m in self.named_modules():
+    #         if type(m) == nn.ReLU:
+    #             self.hooks[n] = m.register_forward_hook(get_activation(n))
     
     def forward(self, x):
-        x = self.batchnorm(x)
         x, skip_connection_4 = self.down_1(x)
         x, skip_connection_3 = self.down_2(x)
         x, skip_connection_2 = self.down_3(x)
@@ -172,8 +158,8 @@ class UpSamplingBlock(nn.Module):
 
     def forward(self, x: Tensor, skip_connection: Tensor) -> Tensor:
         x = self.transpose_conv2d(x)
-        x = self.dropout(x)
         x = torch.cat([x, skip_connection], -3)
+        x = self.dropout(x)
         x = self.conv1(x)
         x = self.activation1(x)
         x = self.dropout1(x)

@@ -22,20 +22,23 @@
 <body>
     <div class='title'>
         <h1 align='center'> A U-Net implementation for Building Segmentation on Ikonos-2 Satellite Images </h1>
-        <h3 align='center'>(Work in Progress)</h3>
+        <h3 align='center'>(First version -- Will be pursued further if found useful)</h3>
         <p align='center'>
             Project based on the original <a href="https://arxiv.org/abs/1505.04597">U-Net paper</a>
             by Olaf Ronneberger, Philipp Fischer and Thomas Brox (2015)
         </p>
     </div>
+    <div align='center'><i><b>Motivation:</b> Data availability & exploration of model capabilities -- Curiosity. The possibility of developing a quick and consistent building analysis tool for legacy Ikonos-2 archives.</i>
+    </div>
     <div class='sections'>
         <div class='data'>
             <h2>1. Data</h2>
             <ul>
-                <li>Ikonos-2 Multispectral images consisted of a Blue, Green, Red, and Near-Infrared channel. Ikonos-2 images come at a Spatial Resolution of 0.8 meters and a Radiometric Resolution of 11 bits.</li>
-                <li>Initial training phase includes samples from 10 sub-areas of an image of the greater Thessaloniki Region, Greece, taken in Spring. This phase aims to evaluate model performance overall, as well as its generalization capabilities on images acquired on different seasons, before the dataset can be expanded. <br>
+                <li>Ikonos-2 Multispectral images are consisted of a Blue, Green, Red, and Near-Infrared channel. Ikonos-2 images come at a Spatial Resolution of 0.8 meters and a Radiometric Resolution of 11 bits.</li>
+                <li>Initial training phase includes samples from 10 sub-areas of an image taken at the greater Thessaloniki Region, Greece, taken in Spring. This phase aims to give initial performance evaluations and generalization capabilities on images of different distributions (e.g. acquired in other seasons), before the dataset distribution can be expanded. <br>
                 <div align='center'>
-                    <img align='center' src='./imgdir/training_areas.png' alt='Training areas' style='float:center;'> <br> &copy DigitalGlobe
+                    <img align='center' src='./imgdir/training_areas.png' alt='Training areas' style='float:center;'>
+                    <footer>Training areas &copy DigitalGlobe </footer>
                 </div>
                 </li>
                 <li>Sample areas were delineated in QGIS and samples were collected similarly from industrial and urban environments. Further samples were taken from irregular background areas. Extracted rasters were processed further into normalized tiles, separated in positive and negative samples and stored in hdf5 format. About 1/6 of each sub-area was kept for validation.</li>
@@ -46,7 +49,7 @@
         <div style='border-width:1px;padding:5px' class='training'>
             <h2>2. Training Environment</h2>
             <div align='center' class='training'>
-                <p align='left'>Training mainly followed the recommendations of Ronneberger et al. (2015).
+                <p align='left'>Training mainly followed the recommendations of Ronneberger et al. (2015), <u>without applying additional weights to edge pixels</u> as suggested in the paper.
                     Additional training ideas and methods, such as class balancing, were adopted from
                     <a href='https://www.google.com/search?channel=fs&client=ubuntu&q=deep+learning+with+pytorch'>Deep Learning with PyTorch</a> by Eli Stevens, Luca Antiga and Thomas Viehmann (2020).
                 </p> 
@@ -61,11 +64,14 @@
                 <li><h4><b>Optimizer</b></h4>
                     Adam was used with a high momentum (beta1), as recommended in Ronneberger et al. 2015. Beta2 was kept at its default value.
                 </li>
+                <li><h4><b>Class Balancing</b></h4>
+                A tile size of 256 * 256 was chosen, since it was found to produce cleaner samples and allowed for a better separation of tiles into negative (label 0) and positive (label 1).
+                </li>
                 <li><h4><b>Data Augmentation</b></h4>
-                    Augmentation includes affine transformations (Translation, Rotation, Scaling and Shear), noise, brightness and contrast adjustments, as well as elastic deformations. Elastic deformation was implemented according to Microsoft paper <a href='https://www.microsoft.com/en-us/research/wp-content/uploads/2003/08/icdar03.pdf'>Best Practices for Convolutional Neural Networks Applied to Visual Document Analysis</a>. 
+                    Augmentation includes affine transformations (Translation, Rotation, Scaling and Shear), noise, brightness and contrast adjustment, as well as elastic deformation. Elastic deformation was implemented according to Microsoft paper <a href='https://www.microsoft.com/en-us/research/wp-content/uploads/2003/08/icdar03.pdf'>Best Practices for Convolutional Neural Networks Applied to Visual Document Analysis</a>. 
                     <ol>
                         <li>
-                            <b>Translations</b> were implemented randomly up to 20% in either x and y axes.
+                            <b>Translations</b> were implemented randomly up to 20% in both x and y axes.
                         </li>
                         <li>
                             <b>Rotation</b> was unrestricted up to 360 degrees.
@@ -77,25 +83,58 @@
                             <b>Shear</b> was applied randomly at a range of 70 degrees, using a single angular parameter in torchvision.transforms.functional.affine().
                         </li>
                         <li>
-                            <b>Noise</b> robustness pursued was kept at 1%, but could generally be increased up to 2%.
+                            <b>Pixel Noise</b> was applied in a normal distribution of Standard Deviation 0.02.
                         </li>
                         <li>
-                            <b>Contrast adjustment</b> was found to be particularly valuable in training for this particular task. Contrast was randomly adjusted between 50% and 200% of the original image, using a customised method to support 4-channel images. The images were re-normalized to [0, 1] post adjustment.
+                            <b>Atmospheric Noise</b> was applied from a mask of size 32 x 32 and Std 0.5, upsampled to tile dimensions. This augmentation attempts to imitate the effects of haze and absorption.
                         </li>
                         <li>
-                            <b>Brightness adjustments</b> were applied within 50-150% of the original image brightness. Excessive pixel values were clipped to [0, 1] post adjustment.
+                            <b>Contrast adjustment</b> was found to be particularly valuable in training for this particular task. Contrast was randomly adjusted between 70% and 150% of the original image, using a customised torchvision method to support 4-channel images. The images were re-normalized to [0, 1] post adjustment.
                         </li>
                         <li>
-                            <b>Elastic deformations</b> proved to be as crucial to training as claimed in the U-Net paper. However, the gaussian kernel used in the deformations has to be at least the same size as the kernel used for the convolutional neural networks, in order for the augmentation to be effective.
+                            <b>Brightness adjustments</b> were applied within 80-120% of the original image brightness. Excessive pixel values were clipped to [0, 1] post adjustment.
                         </li>
+                        <li>
+                            <b>Elastic deformations</b> proved to be as helpful in training as claimed in the U-Net paper. The gaussian kernel used in the deformations appears to have to be the same size as the kernel used for the convolutional neural networks, for optimal results.
+                        </li>
+                        <div align='center'>
+                            <img src="imgdir/results_epoch_300.png" align='center'>
+                            <footer>Examples of augmented training sample and validation sample at 300th epoch.</footer>
+                        </div>
                     </ol>
                 </li>
                 <li>
-                    <h4><b>Dropout Layers</b></h4>
-                    Despite the extended augmentations, dropout layers were found to be necessary on some level for convolutional layers over 128 filters.
+                    <h4><b>Regularization</b></h4>
+                    <ul>
+                    <li>
+                        <p>
+                            <b>Weight Decay:</b> L2 regularization was applied to the first two convolutional layers, due to excessive growth of single filters. This is assumed to be occuring due to the NIR input channel, which can be exploited to explain the majority of negative samples.
+                        </p>
+                    </li>
+                    <li>
+                        <p>
+                            <b>Dropout Layers</b>
+                            Two dropout layers were applied in the last downsampling block as suggested in literature. However, despite the extent of augmentations the model kept overfitting, so additional layers were added in each residual conjunction with a droprate of 30%.
+                        </p>
+                        <br>
+                        --
+                        <br>
+                        <i>Still experimenting from time to time, <b>might not</b> be in line with current model.</i>
+                        <br>
+                        --
+                    </li>
+                    </ul>
                 </li>
                 <li>
-                    <h4><b>Usage</b></h4>
+                    <h4><b>Latest Successful Architecture+Tuning</b></h4>
+                    <div align='center'>
+                        <img src='imgdir/architecture.jpg'>
+                        <footer>Source: <i>Ronneberger et al. (2015) -- Edited by author</i></footer>
+                    </div>
+                </li>
+                <li>
+                    <h4><b>Training Environment Usage</b></h4>
+                    <p><i>Incase anyone is interested in training further</i></p>
                     <pre><code>
 model_training.py:
 
@@ -126,7 +165,7 @@ optional arguments:
   --dropouts DROPOUTS [DROPOUTS ...], -d DROPOUTS [DROPOUTS ...]
                         Sequence of length 5. Dropout probabilities for each NN block (positions 0-4). Applied symmetrically.
   --weights WEIGHTS [WEIGHTS ...], -w WEIGHTS [WEIGHTS ...]
-                        Class weights for loss computation. Sequence of length <classes>
+                        Class weights for loss computation. Sequence of length <num_classes>
   --check-rate CHECK_RATE
                         Make checkpoint every n epochs - For Monitor/Checkpoint. Default: EPOCHS // 10
                     </code></pre>
@@ -134,11 +173,66 @@ optional arguments:
             </ul>
         </div>
         <div>
-            <h2>3. Training Results
+            <h2>3. Training Results</h2>
+                    <div align='center'>
+                        <img src="Reports/Report.png">
+                        <footer>Latest Successful Experiment -- Model training visualization</footer>
+                    </div>
+            </ul>
+        </div>
+        <div>
+            <h2>4. Test Results</h2>
+            <ol>
+            <li>
+            <h4><b>Same Distribution</b> <i>(Neighboring spring scene)</i></h4>
+            <p>
+            Testing samples were drawn from a neighboring scene to the training distribution, taken the same day.
+            </p>
+            <div align='center'>
+                <img src='imgdir/test_areas.png'>
+                <footer>Test areas &copy DigitalGlobe </footer>
+            </div>
+                <ul>
+                    <li>
+                    Urban:
+                    <div align='center'>
+                    <img src='Evaluation/Results/URBAN_Recall.png' width=40%>
+                    <img src='Evaluation/Results/URBAN_Precision.png' width=40%>
+                    </div>
+                    </li>
+                    <li>
+                    Industrial:
+                    <div align='center'>
+                    <img src='Evaluation/Results/INDUSTRIAL_Recall.png' width=40%>
+                    <img src='Evaluation/Results/INDUSTRIAL_Precision.png' width=40%>
+                    </div>
+                    </li>
+                    <li>
+                    Mostly Background -- Elevated Areas:
+                    <div align='center'>
+                    <img src='Evaluation/Results/BACKGROUND_Recall.png' width=40%>
+                    <img src='Evaluation/Results/BACKGROUND_Precision.png' width=40%>
+                    </div>
+                    </li>
+                </ul>
+            </li>
+            <li>
+            <h4><b>Different Distribution</b> <i>(Further away winter scene)</i></h4>
+            <p>
+            # TODO
+            </p>
+            </li>
+            </ol>
+        </div>
+        <div>
+        <h2>5. Brief Error Inspection</h2>
+        <p>Cement rooftops appear to be under represented.</p>
+        # TODO
         </div>
     </div>
 </body>
 <footer>
+<h4><u><b>Developer/Author</b></u>:</h4>
 Iosif Doundoulakis <br> M.Eng. Spatial Planning & Development<br>
 iosif.doundoulakis@outlook.com
 </footer>

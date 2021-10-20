@@ -151,7 +151,7 @@ def separate_labels(X, Y):
     return X_pos, Y_pos, X_neg, Y_neg
 
 
-def make_training_hdf5(train_tiles=512, val_tiles=512):
+def write_hdf5(train_tiles=512, val_tiles=512):
     """
         Iterate over the training x, y tifs,
         compress them in tiles in hdf5 format
@@ -393,7 +393,7 @@ class Buildings(Dataset):
         factor = torch.rand(1) * r + m
         mean = img.mean((-3, -2, -1), keepdim=True)
         img = (factor * img + (1 - factor) * mean)
-        return img / img.max()
+        return (img / img.max()).clamp(0, 1)
 
     @log_augmentation
     def _adjust_brightness_(self, img: Tensor, r: float, m: float):
@@ -446,11 +446,25 @@ class Buildings(Dataset):
         return img[0], img[1]
 
     @log_augmentation
-    def _noise_(self, img: Tensor, f: float):
+    def _pixel_noise_(self, img: Tensor, f: float):
         if self.validation:
             return img
         img = img + torch.randn_like(img) * f
         return img.clamp(0, 1)
+
+    @log_augmentation
+    def _atmospheric_noise_(self, img: Tensor, factor: float=.5):
+        """
+        Imitate atmospheric interference
+        """
+        factor = factor * torch.rand(1)
+        grid = F.gaussian_blur(
+            torch.randn(1, 32, 32),
+            15
+        )
+        atm_noise = F.resize(grid, img[0].shape[-2:])
+        img += atm_noise*factor
+        return (img / img.max()).clamp(0, 1)
 
     @log_augmentation
     def _elastic_deformation_(self, img: List[Tensor],
@@ -520,6 +534,7 @@ class Buildings(Dataset):
         if self.validation:
             length = self.X_val.len()
         else:
+            # Ensures pass through all samples
             length = np.abs(self.ratio)*max(self.X_train_neg.len(), self.X_train_pos.len())*5
         return length
 
@@ -571,19 +586,8 @@ class Buildings(Dataset):
 
         image, label = (torch.from_numpy(features[idx]),
                         torch.from_numpy(labels[idx]))
+        image, label = self._augment_([image, label])
 
-        # image, label = self._random_crop_([image, label], 256)
-        image, label = self._random_flip_([image, label])
-        image = self._noise_(image, f=0.02)
-        image = self._adjust_contrast_(image, r=.4, m=.8)
-        image = self._adjust_brightness_(image, r=0.2, m=.9)
-        image, label = self._elastic_deformation_([image, label],
-                                                  k=3,
-                                                  sigma=10.,
-                                                  alpha=0.02)
-        image, label = self._affine_([image, label.unsqueeze(0)],
-                                     sh=(30, 15), sc=(.75, 0.75),
-                                     t=(0.2, 0.2), r=(360, 180))
         return image, label.to(torch.long).squeeze(0)
 
     def _augment_(self, img: List[Tensor]):
@@ -592,10 +596,26 @@ class Buildings(Dataset):
 
         :param img: List of tensors in [feature, label] format
         """
-        return img
+        image, label = img
+        if self.validation:
+            return image, label
+        # image, label = self._random_crop_([image, label], 256)
+        image, label = self._random_flip_([image, label])
+        image = self._pixel_noise_(image, f=0.02)
+        image = self._atmospheric_noise_(image, .5)
+        image = self._adjust_contrast_(image, r=.8, m=.7)
+        image = self._adjust_brightness_(image, r=0.2, m=.9)
+        image, label = self._elastic_deformation_([image, label],
+                                                  k=3,
+                                                  sigma=10.,
+                                                  alpha=0.02)
+        image, label = self._affine_([image, label.unsqueeze(0)],
+                                     sh=(30, 15), sc=(.75, 0.75),
+                                     t=(0.2, 0.2), r=(360, 180))
+        return image, label
 
 
 if not os.path.exists("Training/training_data.hdf5"):
     os.makedirs("Training", exist_ok=True)
-    make_training_hdf5(train_tiles=args.training_tile_size,
+    write_hdf5(train_tiles=args.training_tile_size,
                        val_tiles=args.validation_tile_size)
