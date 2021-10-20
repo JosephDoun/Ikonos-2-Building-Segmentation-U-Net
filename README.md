@@ -37,7 +37,7 @@
                 <li>Ikonos-2 Multispectral images are consisted of a Blue, Green, Red, and Near-Infrared channel. Ikonos-2 images come at a Spatial Resolution of 0.8 meters and a Radiometric Resolution of 11 bits.</li>
                 <li>Initial training phase includes samples from 10 sub-areas of an image taken at the greater Thessaloniki Region, Greece, taken in Spring. This phase aims to give initial performance evaluations and generalization capabilities on images of different distributions (e.g. acquired in other seasons), before the dataset distribution can be expanded. <br>
                 <div align='center'>
-                    <img align='center' src='./imgdir/training_areas.png' alt='Training areas' style='float:center;'><br>
+                    <img align='center' src='./imgdir/training_areas.png' alt='Training areas' style='float:center;' height=80%><br>
                     <footer>Training areas &copy DigitalGlobe </footer>
                 </div>
                 </li>
