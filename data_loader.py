@@ -530,6 +530,10 @@ class Buildings(Dataset):
         img[1] = F.crop(img[1], top, left, height, width)
         return img
 
+    @log_augmentation
+    def __rgb_color_shift__(self):
+        pass
+
     def __len__(self):
         if self.validation:
             length = self.X_val.len()

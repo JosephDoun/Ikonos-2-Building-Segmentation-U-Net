@@ -86,7 +86,7 @@
                             <b>Pixel Noise</b> was applied in a normal distribution of Standard Deviation 0.02.
                         </li>
                         <li>
-                            <b>Atmospheric Noise</b> was applied from a mask of size 32 x 32 and Std 0.5, upsampled to tile dimensions. This augmentation attempts to imitate the effects of haze and absorption.
+                            <b>Atmospheric Noise</b> was applied from a mask of size 32 x 32 and Std 0.5, upsampled to tile dimensions. This augmentation attempts to simulate the effects of haze and absorption.
                         </li>
                         <li>
                             <b>Contrast adjustment</b> was found to be particularly valuable in training for this particular task. Contrast was randomly adjusted between 70% and 150% of the original image, using a customised torchvision method to support 4-channel images. The images were re-normalized to [0, 1] post adjustment.
