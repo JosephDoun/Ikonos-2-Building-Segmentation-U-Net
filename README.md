@@ -228,7 +228,9 @@ optional arguments:
         </div>
         <div>
         <h2>5. Brief Error Inspection</h2>
-        <p>Cement rooftops appear to be under represented.</p>
+        <p>Cement rooftops, which are a majority in the background test sample group, appear to be under represented in the training set.</p>
+        <br>
+        <p>To be improved.</p>
         # TODO
         </div>
     </div>
