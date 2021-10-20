@@ -35,7 +35,7 @@ parser.add_argument("--monitor", "-m",
                     const=1,
                     action='store_const')
 parser.add_argument("--l2",
-                    help='L2 Regularization parameters. Sequence of length 5. Applied like dropouts.',
+                    help='L2 Regularization parameters. Sequence of length 23.',
                     default=[0.]*23,
                     type=float,
                     nargs='+')
@@ -59,7 +59,7 @@ parser.add_argument("--checkpoint", "-c",
 parser.add_argument("--balance-ratio", '-b',
                     type=int,
                     default=2,
-                    help="Every n-th sample is negative, the rest are positive")
+                    help="For positive values roughly every n-th sample is negative, the rest are positive. The opposite for negative values.")
 parser.add_argument("--report-rate",
                     type=int,
                     default=0,
@@ -69,12 +69,12 @@ parser.add_argument("--report-rate",
                     """)
 parser.add_argument('--dropouts', '-d', type=float,
                     nargs='+', default=[0.]*23,
-                    help='Sequence of length 5. Dropout probabilities for each NN block (positions 0-4). Applied symmetrically.')
+                    help='Sequence of length 23. Dropout probabilities for each CNN.')
 parser.add_argument('--weights', '-w',
                     type=float,
                     nargs='+',
                     default=[1., 1.],
-                    help='Class weights for loss computation. Sequence of length <classes>')
+                    help='Class weights for loss computation. Sequence of length 2')
 parser.add_argument("--check-rate",
                     type=int,
                     default=0,

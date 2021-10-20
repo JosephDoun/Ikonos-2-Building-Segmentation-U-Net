@@ -138,7 +138,9 @@
                     <pre><code>
 model_training.py:
 
-usage: Model Training [-h] [--epochs EPOCHS] [--batch-size BATCH_SIZE] [--num-workers NUM_WORKERS] [--lr LR] [--report] [--monitor] [--l2 L2   [L2 ...]] [--reload] [--init-scale INIT_SCALE] [--checkpoint CHECKPOINT] [--balance-ratio BALANCE_RATIO] [--report-rate REPORT_RATE] [--dropouts DROPOUTS [DROPOUTS ...]] [--weights WEIGHTS [WEIGHTS ...]] [--check-rate CHECK_RATE]
+usage: Model Training [-h] [--epochs EPOCHS] [--batch-size BATCH_SIZE] [--num-workers NUM_WORKERS] [--lr LR] [--report] [--monitor] [--l2 L2 [L2 ...]] [--reload]
+                      [--init-scale INIT_SCALE] [--checkpoint CHECKPOINT] [--balance-ratio BALANCE_RATIO] [--report-rate REPORT_RATE] [--dropouts DROPOUTS [DROPOUTS ...]]
+                      [--weights WEIGHTS [WEIGHTS ...]] [--check-rate CHECK_RATE]
 
 Training
 
@@ -152,22 +154,22 @@ optional arguments:
   --lr LR               Learning rate
   --report, -r          Store losses on memory and produce a report graph -- Contrained by memory size. Control with REPORT_RATE to minimize logs accordingly
   --monitor, -m         Observe activations and predictions of a sample
-  --l2 L2 [L2 ...]      L2 Regularization parameters. Sequence of length 5. Applied like dropouts.
+  --l2 L2 [L2 ...]      L2 Regularization parameters. Sequence of length 23.
   --reload              Load checkpoint and continue training
   --init-scale INIT_SCALE, -i INIT_SCALE
                         The factor to initially multiply input channels with: in_channels*INIT_SCALE = out_channels -- Controls overall U-net feature length
   --checkpoint CHECKPOINT, -c CHECKPOINT
                         Path to saved checkpoint
   --balance-ratio BALANCE_RATIO, -b BALANCE_RATIO
-                        Every n-th sample is negative, the rest are positive
+                        For positive values roughly every n-th sample is negative, the rest are positive. The opposite for negative values.
   --report-rate REPORT_RATE
                         Epoch frequency to log losses for reporting. Default: EPOCHS // 10
   --dropouts DROPOUTS [DROPOUTS ...], -d DROPOUTS [DROPOUTS ...]
-                        Sequence of length 5. Dropout probabilities for each NN block (positions 0-4). Applied symmetrically.
+                        Sequence of length 23. Dropout probabilities for each CNN.
   --weights WEIGHTS [WEIGHTS ...], -w WEIGHTS [WEIGHTS ...]
-                        Class weights for loss computation. Sequence of length <num_classes>
+                        Class weights for loss computation. Sequence of length 2
   --check-rate CHECK_RATE
-                        Make checkpoint every n epochs - For Monitor/Checkpoint. Default: EPOCHS // 10
+                        Write checkpoint every n epochs - For Monitor/Checkpoint options. Default: EPOCHS // 10
                     </code></pre>
                 </li>
             </ul>
