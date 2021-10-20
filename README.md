@@ -175,7 +175,7 @@ optional arguments:
         <div>
             <h2>3. Training Results</h2>
                     <div align='center'>
-                        <img src="Reports/Report.png">
+                        <img src="Reports/Report.png" width=80%>
                         <footer>Latest Successful Experiment -- Model training visualization</footer>
                     </div>
             </ul>
