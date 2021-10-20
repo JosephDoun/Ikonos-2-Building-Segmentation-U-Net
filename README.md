@@ -128,7 +128,7 @@
                 <li>
                     <h4><b>Latest Successful Architecture+Tuning</b></h4>
                     <div align='center'>
-                        <img src='imgdir/architecture.jpg'>
+                        <img src='imgdir/architecture.jpg' align='center'>
                         <footer>Source: <i>Ronneberger et al. (2015) -- Edited by author</i></footer>
                     </div>
                 </li>
@@ -175,7 +175,7 @@ optional arguments:
         <div>
             <h2>3. Training Results</h2>
                     <div align='center'>
-                        <img src="Reports/Report.png" width=80%>
+                        <img src="Reports/Report.png" width=80% align='center'><br>
                         <footer>Latest Successful Experiment -- Model training visualization</footer>
                     </div>
             </ul>
@@ -189,29 +189,29 @@ optional arguments:
             Testing samples were drawn from a neighboring scene to the training distribution, taken the same day.
             </p>
             <div align='center'>
-                <img src='imgdir/test_areas.png'>
+                <img src='imgdir/test_areas.png' align='center'><br>
                 <footer>Test areas &copy DigitalGlobe </footer>
             </div>
                 <ul>
                     <li>
                     Urban:
                     <div align='center'>
-                    <img src='Evaluation/Results/URBAN_Recall.png' width=40%>
-                    <img src='Evaluation/Results/URBAN_Precision.png' width=40%>
+                    <img src='Evaluation/Results/URBAN_Recall.png' width=40% align='center'>
+                    <img src='Evaluation/Results/URBAN_Precision.png' width=40% align='center'>
                     </div>
                     </li>
                     <li>
                     Industrial:
                     <div align='center'>
-                    <img src='Evaluation/Results/INDUSTRIAL_Recall.png' width=40%>
-                    <img src='Evaluation/Results/INDUSTRIAL_Precision.png' width=40%>
+                    <img src='Evaluation/Results/INDUSTRIAL_Recall.png' width=40% align='center'>
+                    <img src='Evaluation/Results/INDUSTRIAL_Precision.png' width=40% align='center'>
                     </div>
                     </li>
                     <li>
                     Mostly Background -- Elevated Areas:
                     <div align='center'>
-                    <img src='Evaluation/Results/BACKGROUND_Recall.png' width=40%>
-                    <img src='Evaluation/Results/BACKGROUND_Precision.png' width=40%>
+                    <img src='Evaluation/Results/BACKGROUND_Recall.png' width=40% align='center'>
+                    <img src='Evaluation/Results/BACKGROUND_Precision.png' width=40% align='center'>
                     </div>
                     </li>
                 </ul>
