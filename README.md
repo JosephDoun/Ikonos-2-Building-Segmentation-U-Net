@@ -227,8 +227,15 @@ optional arguments:
             </ol>
         </div>
         <div>
-        <h2>5. Brief Error Inspection</h2>
-        <p>Cement rooftops, which are a majority in the background test sample group, appear to be under represented in the training set.</p>
+        <h2>5. Conclusions / Key Findings</h2>
+        <p>
+        Cement rooftops, which are a majority in the background test sample group, appear to be under represented in the training set. However, because I have classified this area before in my thesis and I know it well, the error distribution looks very similar to the results I had gotten using OBIA with a SVM classifier. This, together with the fact that affine transformations / image flips and other spatial augmentations do not seem to have any effect in training leads me to believe that there's a problem with the architecture and the model is mostly working with colors, rather than spatial patterns. Which is not what this architecture is supposed to do, as it was proven to work remarkably well with 1-channel images. This probably happens because the input channels are intermixed immediately (similar to regular pixel based classification) and the subsequent features are developed based on that.</p>
+        <p>
+        Solution to this problem could be the isolation of each input channel and the parallel development of features per channel during downsampling, while merging them during upsampling. This however would probably result in duplicate work and an unnecessarily large model, since you would have to produce 4 times the feature maps.
+        </p>
+        <p>
+        A better solution would be to add an image synthesizer 1x1 conv layer near the input and let the network combine the channels linearly to its preference, in a single one-channel image, before feeding it to the rest of the network.
+        </p>
         <br>
         <p>To be improved.</p>
         # TODO
