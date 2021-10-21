@@ -234,7 +234,7 @@ optional arguments:
         Solution to this problem could be the isolation of each input channel and the parallel development of features per channel during downsampling, while merging them during upsampling. This however would probably result in duplicate work and an unnecessarily large model, since you would have to produce 4 times the feature maps.
         </p>
         <p>
-        A better solution would be to add an image synthesizer 1x1 conv layer near the input and let the network combine the channels linearly to its preference, in a single one-channel image, before feeding it to the rest of the network.
+        A better solution would be to add an image synthesizer 1x1 conv layer near the input and let the network combine the channels linearly to its preference, into a single one-channel image, before feeding it to the rest of the network.
         </p>
         <p>To be addressed in version 2.</p>
         # TODO
