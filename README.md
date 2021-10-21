@@ -236,8 +236,7 @@ optional arguments:
         <p>
         A better solution would be to add an image synthesizer 1x1 conv layer near the input and let the network combine the channels linearly to its preference, in a single one-channel image, before feeding it to the rest of the network.
         </p>
-        <br>
-        <p>To be improved.</p>
+        <p>To be addressed in version 2.</p>
         # TODO
         </div>
     </div>
