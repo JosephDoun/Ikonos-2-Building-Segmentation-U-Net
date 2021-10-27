@@ -238,6 +238,9 @@ optional arguments:
         </p>
         <p>To be addressed in version 2.</p>
         # TODO
+        <p>
+        Additionally, it would be ideal to label each rooftop according to its type. That would allow for much more elaborate error analysis, but it is something I'm not eager doing right now for an experimental personal project. Potentially to be addressed in the future.
+        </p>
         </div>
     </div>
 </body>
